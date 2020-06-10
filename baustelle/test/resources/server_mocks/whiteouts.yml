@@ -1,0 +1,67 @@
+---
+- request:
+    method: head
+  response:
+    headers:
+      - header: WWW-Authenticate
+        value: Bearer realm="SERVER_URL/auth",service="registry.docker.io",scope="repository:library/nginx:pull"
+
+- request:
+    method: GET
+    path: /auth
+  response:
+    body: ./basic/auth.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/manifests/(.*)
+    headers:
+      - header: Accept
+        value: application/vnd.docker.distribution.manifest.v2+json
+  response:
+    body: ./whiteouts/manifest.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/manifests/(.*)
+    headers:
+      - header: Accept
+        value: application/vnd.docker.distribution.manifest.list.v2+json
+  response:
+    body: ./whiteouts/manifest_index.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/blobs/(.*)
+    headers:
+      - header: Accept
+        value: application/vnd.oci.image.config.v1+json
+  response:
+    body: ./whiteouts/config.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/blobs/sha256:526471adf41794e411a43ac336431e7ef287d7bd203559cfa73fb3c4dbdf70d8
+    headers:
+      - header: Accept
+        value: application/vnd.oci.image.layer.v1.tar+gzip
+  response:
+    body: ./whiteouts/layer1.tar.gz
+
+- request:
+    method: GET
+    path: /v2/(.*)/blobs/sha256:0c65bd1b64c07b2b884d3c5fa2164bb332a59532dc10754e987ff60a05507571
+    headers:
+      - header: Accept
+        value: application/vnd.oci.image.layer.v1.tar+gzip
+  response:
+    body: ./whiteouts/layer2.tar.gz
+
+- request:
+    method: GET
+    path: /v2/(.*)/blobs/sha256:a05366bf184818015998c59328d934f36d912c6e06699543c879adca845f8f4a
+    headers:
+      - header: Accept
+        value: application/vnd.oci.image.layer.v1.tar+gzip
+  response:
+    body: ./whiteouts/layer3.tar.gz

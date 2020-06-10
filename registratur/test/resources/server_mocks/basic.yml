@@ -1,0 +1,49 @@
+---
+- request:
+    method: head
+  response:
+    headers:
+      - header: WWW-Authenticate
+        value: Bearer realm="SERVER_URL/auth",service="registry.docker.io",scope="repository:library/nginx:pull"
+
+- request:
+    method: GET
+    path: /auth
+  response:
+    body: ./basic/auth.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/manifests/(.*)
+    headers:
+      - header: Accept
+        value: application/vnd.docker.distribution.manifest.v2+json
+  response:
+    body: ./basic/manifest.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/manifests/(.*)
+    headers:
+      - header: Accept
+        value: application/vnd.docker.distribution.manifest.list.v2+json
+  response:
+    body: ./basic/manifest_index.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/blobs/(.*)
+    headers:
+      - header: Accept
+        value: application/vnd.oci.image.config.v1+json
+  response:
+    body: ./basic/config.json
+
+- request:
+    method: GET
+    path: /v2/(.*)/blobs/(.*)
+    headers:
+      - header: Accept
+        value: application/vnd.oci.image.layer.v1.tar+gzip
+  response:
+    body: ./basic/layer1

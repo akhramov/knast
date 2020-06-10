@@ -1,0 +1,4 @@
+max_width = 79
+force_multiline_blocks = true
+wrap_comments = true
+comment_width = 60

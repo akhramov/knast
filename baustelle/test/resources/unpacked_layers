@@ -1,0 +1,7 @@
+vec![
+    "directory/foo/baz",
+    "directory/foo/bad",
+    "directory/bsd/getting/oci/containers",
+].into_iter()
+ .map(std::path::PathBuf::from)
+ .collect::<Vec<std::path::PathBuf>>()

@@ -1,0 +1,10 @@
+[package]
+license = "BSD-4-Clause"
+name = "werft"
+version = "0.1.0"
+authors = ["akhramov"]
+edition = "2018"
+
+[dependencies]
+baustelle = { path = "./baustelle" }
+tokio = { version = "0.2.13", features = ["full"] }

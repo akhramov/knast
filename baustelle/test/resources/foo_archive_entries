@@ -1,0 +1,13 @@
+vec![
+    "foo/",
+    "foo/bar",
+    "foo/baz",
+    "foo/bad/",
+    "foo/bis",
+    "foo/bad/baz/",
+    "foo/bad/bad",
+    "foo/bad/baz/baz/",
+    "foo/bad/baz/baz/baz",
+].into_iter()
+ .map(std::path::PathBuf::from)
+ .collect::<Vec<std::path::PathBuf>>()
