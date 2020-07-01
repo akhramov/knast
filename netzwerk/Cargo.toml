@@ -1,0 +1,17 @@
+[package]
+name = "netzwerk"
+version = "0.1.0"
+authors = ["akhramov"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+fehler = { git = "https://github.com/withoutboats/fehler" }
+libc = "0.2.71"
+
+[dev-dependencies]
+test_helpers = { path = "../test_helpers" }
+# https://github.com/fubarnetes/libjail-rs/pull/79
+jail = { git = "https://github.com/akhramov/libjail-rs", branch = "dev" }

@@ -1,0 +1,2 @@
+werft0: flags=8843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> metric 0 mtu 1500
+	inet 172.23.0.1 netmask 0xffff0000 broadcast 172.23.255.255
