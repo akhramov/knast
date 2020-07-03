@@ -221,7 +221,7 @@ checksum = "dc6f3ad7b9d11a0c00842ff8de1b60ee58661048eb8049ed33c73594f359d7e6"
 [[package]]
 name = "jail"
 version = "0.1.2-alpha.0"
-source = "git+https://github.com/akhramov/libjail-rs?branch=dev#2d0145148f71cf9c7019816cf8fe9a52450fc1d2"
+source = "git+https://github.com/fubarnetes/libjail-rs?branch=dev#b5b599c72132a62c631f1882ccbe443d792bb818"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -303,6 +303,7 @@ dependencies = [
  "fehler",
  "jail",
  "libc",
+ "nix 0.17.0",
  "test_helpers",
 ]
 
@@ -545,15 +546,15 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.17.1"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "530efb820d53b712f4e347916c5e7ed20deb76a4f0457943b3182fb889b06d2c"
+checksum = "57bd81eb48f4c437cadc685403cad539345bf703d78e63707418431cecd4522b"
 
 [[package]]
 name = "strum_macros"
-version = "0.17.1"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e6e163a520367c465f59e0a61a23cfae3b10b6546d78b6f672a382be79f7110"
+checksum = "87c85aa3f8ea653bfd3ddf25f7ee357ee4d204731f6aa9ad04002306f6e2774c"
 dependencies = [
  "heck",
  "proc-macro2",

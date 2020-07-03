@@ -1,5 +1,6 @@
 mod bindings;
 
+use std::ffi::CStr;
 use std::mem;
 
 use anyhow::Error;
@@ -110,6 +111,28 @@ impl Interface {
         self
     }
 
+    /// Get interface's name
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use netzwerk::interface::Interface;
+    ///
+    /// Interface::new("bridge")
+    ///     .expect("Failed to create iface socket")
+    ///     .create()
+    ///     .expect("Failed to create interface")
+    ///     .get_name()
+    ///     .expect("Failed to rename interface");
+    /// ```
+    #[fehler::throws]
+    pub fn get_name(&self) -> &str {
+        let cstr =
+            unsafe { CStr::from_ptr(self.request.ifr_name.as_ptr() as _) };
+
+        cstr.to_str()?
+    }
+
     /// Set inet address, broadcast address & netmask
     ///
     /// # Examples
@@ -141,6 +164,9 @@ impl Interface {
 
     /// Put interface into the jail
     ///
+    /// This method consumes self, since interface is moved
+    /// into the jail.
+    ///
     /// # Examples
     /// Create if_bridge(4) interface and put it into the
     /// jail with id = 2
@@ -156,7 +182,7 @@ impl Interface {
     ///     .expect("Failed to assign inet vnet");
     /// ```
     #[fehler::throws]
-    pub fn vnet(&mut self, jid: i32) {
+    pub fn vnet(mut self, jid: i32) {
         jail_interface(&self.socket, &mut self.request, jid)?;
     }
 
@@ -240,7 +266,8 @@ mod tests {
     impl Drop for Interface {
         fn drop(&mut self) {
             use std::{thread, time};
-            /* Jail does not return the iface right away upon destruction */
+            /* Jail does not return the iface right away upon
+             * destruction */
             let duration = time::Duration::from_millis(50);
             thread::sleep(duration);
 
@@ -360,8 +387,8 @@ mod tests {
         use jail::process::Jailed;
         use jail::StoppedJail;
 
-        let jail = StoppedJail::new("/")
-            .param("vnet", jail::param::Value::Int(1));
+        let jail =
+            StoppedJail::new("/").param("vnet", jail::param::Value::Int(1));
 
         let running = jail.start().expect("Couldn't start Jail");
 
@@ -378,7 +405,6 @@ mod tests {
 
         assert!(content.contains("werft0"));
 
-        running.stop()
-            .expect("Failed to stop the jail!");
+        running.stop().expect("Failed to stop the jail!");
     }
 }
