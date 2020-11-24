@@ -62,6 +62,17 @@ macro_rules! code_fixture {
 }
 
 #[macro_export]
+macro_rules! fixture_path {
+    ($file:expr) => {
+        std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test/resources/",
+            $file
+        ))
+    }
+}
+
+#[macro_export]
 macro_rules! block_on {
     ($future:expr) => {{
         use $crate::tokio::runtime::Runtime;

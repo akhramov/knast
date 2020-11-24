@@ -14,7 +14,7 @@ use netzwerk::interface::Interface;
 use netzwerk::route;
 use nix::unistd::{fork, ForkResult};
 
-const JAIL_NUMBER: i32 = 2;
+const JAIL_NUMBER: i32 = 5;
 
 extern "C" {
     fn jail_attach(jid: i32) -> i32;
@@ -38,7 +38,7 @@ fn create_interfaces() -> Result<String> {
         .expect("Failed to create iface socket");
 
     pair_b
-        .vnet(JAIL_NUMBER) /* Transfer interface to the jail #4 */
+        .vnet(JAIL_NUMBER) /* Transfer interface to the jail #5 */
         .expect("Failed to move interface to the jail");
 
     bridge.bridge_addm(&[name])?;

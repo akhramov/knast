@@ -74,7 +74,7 @@ impl<'a> Unpacker<'a> {
                     let parent = self.destination.join(parent);
                     let entry = self.destination.join(&entry);
 
-                    let ret = match &*filename.to_string_lossy() {
+                    match &*filename.to_string_lossy() {
                         ".wh..wh..opq" => fs::remove_dir_all(parent)?,
                         item if item.starts_with(".wh.") => {
                             fs::remove_file(&entry)?
@@ -82,7 +82,7 @@ impl<'a> Unpacker<'a> {
                         _ => (),
                     };
 
-                    Ok(ret)
+                    Ok(())
                 })
             })
             .collect::<Result<Vec<_>>>()?

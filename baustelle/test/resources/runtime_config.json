@@ -1,0 +1,168 @@
+{
+  "ociVersion": "1.0.1-dev",
+  "process": {
+    "terminal": true,
+    "user": {
+      "uid": 0,
+      "gid": 0
+    },
+    "args": [
+      "/docker-entrypoint.sh",
+      "nginx",
+      "-g",
+      "daemon off;"
+    ],
+    "env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "TERM=xterm",
+      "HOSTNAME=1285a7fec103",
+      "NGINX_VERSION=1.19.0",
+      "container=podman",
+      "NJS_VERSION=0.4.1",
+      "PKG_RELEASE=1~buster",
+      "HOME=/root"
+    ],
+    "cwd": "/",
+    "rlimits": [
+      {
+        "type": "RLIMIT_NOFILE",
+        "hard": 524288,
+        "soft": 524288
+      },
+      {
+        "type": "RLIMIT_NPROC",
+        "hard": 32768,
+        "soft": 32768
+      }
+    ]
+  },
+  "root": {
+    "path": "/home/user/.local/share/containers/storage/overlay/97dc6f4e9dd4fba06f9580bec0542d12da25b2a1bd527a28ccd6b82d6d065edf/merged"
+  },
+  "hostname": "1285a7fec103",
+  "mounts": [
+    {
+      "destination": "/proc",
+      "type": "proc",
+      "source": "proc",
+      "options": [
+        "nosuid",
+        "noexec",
+        "nodev"
+      ]
+    },
+    {
+      "destination": "/dev",
+      "type": "tmpfs",
+      "source": "tmpfs",
+      "options": [
+        "nosuid",
+        "strictatime",
+        "mode=755",
+        "size=65536k"
+      ]
+    },
+    {
+      "destination": "/sys",
+      "type": "sysfs",
+      "source": "sysfs",
+      "options": [
+        "nosuid",
+        "noexec",
+        "nodev",
+        "ro"
+      ]
+    },
+    {
+      "destination": "/dev/pts",
+      "type": "devpts",
+      "source": "devpts",
+      "options": [
+        "nosuid",
+        "noexec",
+        "newinstance",
+        "ptmxmode=0666",
+        "mode=0620",
+        "gid=5"
+      ]
+    },
+    {
+      "destination": "/dev/mqueue",
+      "type": "mqueue",
+      "source": "mqueue",
+      "options": [
+        "nosuid",
+        "noexec",
+        "nodev"
+      ]
+    },
+    {
+      "destination": "/etc/resolv.conf",
+      "type": "bind",
+      "source": "/run/user/1000/containers/overlay-containers/1285a7fec1035b6a8ee748bd23f4b38d079c030d7ba318b33776fa968897b69b/userdata/resolv.conf",
+      "options": [
+        "bind",
+        "private"
+      ]
+    },
+    {
+      "destination": "/etc/hosts",
+      "type": "bind",
+      "source": "/run/user/1000/containers/overlay-containers/1285a7fec1035b6a8ee748bd23f4b38d079c030d7ba318b33776fa968897b69b/userdata/hosts",
+      "options": [
+        "bind",
+        "private"
+      ]
+    },
+    {
+      "destination": "/dev/shm",
+      "type": "bind",
+      "source": "/home/user/.local/share/containers/storage/overlay-containers/1285a7fec1035b6a8ee748bd23f4b38d079c030d7ba318b33776fa968897b69b/userdata/shm",
+      "options": [
+        "bind",
+        "private"
+      ]
+    },
+    {
+      "destination": "/etc/hostname",
+      "type": "bind",
+      "source": "/run/user/1000/containers/overlay-containers/1285a7fec1035b6a8ee748bd23f4b38d079c030d7ba318b33776fa968897b69b/userdata/hostname",
+      "options": [
+        "bind",
+        "private"
+      ]
+    },
+    {
+      "destination": "/run/.containerenv",
+      "type": "bind",
+      "source": "/run/user/1000/containers/overlay-containers/1285a7fec1035b6a8ee748bd23f4b38d079c030d7ba318b33776fa968897b69b/userdata/.containerenv",
+      "options": [
+        "bind",
+        "private"
+      ]
+    },
+    {
+      "destination": "/sys/fs/cgroup",
+      "type": "cgroup",
+      "source": "cgroup",
+      "options": [
+        "rprivate",
+        "nosuid",
+        "noexec",
+        "nodev",
+        "relatime",
+        "ro"
+      ]
+    }
+  ],
+  "annotations": {
+    "io.container.manager": "libpod",
+    "io.kubernetes.cri-o.Created": "2020-07-03T15:11:40.591482768+06:00",
+    "io.kubernetes.cri-o.TTY": "true",
+    "io.podman.annotations.autoremove": "FALSE",
+    "io.podman.annotations.init": "FALSE",
+    "io.podman.annotations.privileged": "FALSE",
+    "io.podman.annotations.publish-all": "FALSE",
+    "org.opencontainers.image.stopSignal": "15"
+  }
+}
