@@ -8,6 +8,7 @@ edition = "2018"
 anyhow = "1.0"
 bincode = "1.2.1"
 csv = "1.1"
+dockerfile-parser = "0.7.1"
 fehler = "1.0"
 futures = "0.3"
 registratur = { path = "../registratur" }

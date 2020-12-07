@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Error;
 use serde::{de::DeserializeOwned, Serialize};
@@ -10,12 +10,14 @@ pub const BLOBS_STORAGE_KEY: &[u8] = b"blobs";
 
 pub struct Storage {
     inner: sled::Db,
+    cache_dir: PathBuf,
 }
 
 impl Storage {
     #[fehler::throws]
     pub fn new(cache_dir: impl AsRef<Path>) -> Self {
         Self {
+            cache_dir: cache_dir.as_ref().into(),
             inner: sled::open(cache_dir.as_ref().join(STORAGE_FILE))?,
         }
     }
@@ -63,6 +65,10 @@ impl Storage {
     pub async fn flush(&self) -> usize {
         self.inner.flush_async().await?
     }
+
+    pub fn folder(&self) -> PathBuf {
+        self.cache_dir.clone()
+    }
 }
 
 #[cfg(test)]
@@ -88,6 +94,7 @@ mod test {
         let stored_value: Vec<u8> = cache.get(tree, key).unwrap().unwrap();
 
         assert_eq!(stored_value, value);
+        assert_eq!(cache.folder(), dir.path());
         assert!(cache.exists(tree, key).unwrap())
     }
 }

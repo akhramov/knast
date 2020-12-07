@@ -259,7 +259,7 @@ mod tests {
             .unwrap();
 
         let destination = tempdir.into_path().join(&digest);
-        let unpacker = Unpacker::new(storage, &destination);
+        let unpacker = Unpacker::new(&storage, &destination);
 
         unpacker
             .unpack(digest)

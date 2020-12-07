@@ -47,7 +47,7 @@ fn main() {
 
     let digest = rt.block_on(fetch_image(&storage));
 
-    let unpacker = Unpacker::new(storage, Path::new("./centos"));
+    let unpacker = Unpacker::new(&storage, Path::new("./centos"));
 
     unpacker
         .unpack(digest.clone())

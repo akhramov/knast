@@ -8,12 +8,12 @@ use super::archive::Archive;
 use super::storage::{Storage, BLOBS_STORAGE_KEY};
 
 pub struct Unpacker<'a> {
-    storage: Storage,
+    storage: &'a Storage,
     destination: &'a Path,
 }
 
 impl<'a> Unpacker<'a> {
-    pub fn new(storage: Storage, destination: &'a Path) -> Self {
+    pub fn new(storage: &'a Storage, destination: &'a Path) -> Self {
         Self {
             storage,
             destination,
@@ -121,7 +121,7 @@ mod test {
         };
 
         let destination = tempdir.into_path().join(&digest);
-        let unpacker = Unpacker::new(storage, &destination);
+        let unpacker = Unpacker::new(&storage, &destination);
 
         unpacker
             .unpack(digest)
@@ -172,7 +172,7 @@ mod test {
         };
 
         let destination = tempdir.into_path().join(&digest);
-        let unpacker = Unpacker::new(storage, &destination);
+        let unpacker = Unpacker::new(&storage, &destination);
 
         unpacker
             .unpack(digest)
