@@ -1,0 +1,6 @@
+FROM nginx:1.17.10
+
+ENV FOO=/bar
+WORKDIR ${FOO}
+
+CMD /bin/sleep 42

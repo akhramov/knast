@@ -9,4 +9,3 @@ edition = "2018"
 mockito = "0.25.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
-tokio = "0.2.18"

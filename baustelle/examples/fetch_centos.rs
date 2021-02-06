@@ -6,52 +6,39 @@ extern crate log;
 extern crate registratur;
 extern crate tokio;
 
-use std::path::Path;
+use baustelle::{Builder, EvaluationUpdate, LayerDownloadStatus};
 
-use baustelle::{
-    fetcher::{Fetcher, LayerDownloadStatus::*},
-    storage::Storage,
-    unpacker::Unpacker,
-};
-use futures::{future, stream::StreamExt};
-use registratur::v2::client::Client;
-use tokio::runtime::Runtime;
+const CONTAINERFILE: &[u8] = r#"
+FROM centos:latest
 
-async fn fetch_image(storage: &Storage) -> String {
-    let client = Client::build("https://registry-1.docker.io")
-        .expect("failed to build the client");
+ENV FOO=/bar
+WORKDIR ${FOO}
 
-    let architecture = "amd64";
-    let os = vec!["linux".into(), "freebsd".into()];
-    let fetcher = Fetcher::new(&storage, client, architecture.into(), os);
-    let (tx, rx) = futures::channel::mpsc::channel(1);
+CMD /bin/sleep 42
+"#.as_bytes();
 
-    let digest_fut = fetcher.fetch("centos", "7.8.2003", tx);
-    let updates_fut = rx.collect::<Vec<_>>();
+#[tokio::main]
+async fn main() {
+    env_logger::init();
 
-    let (digest, updates) = future::join(digest_fut, updates_fut).await;
+    info!("Fetching a centos image");
 
-    updates.iter().for_each(|x| {
-        if let InProgress(name, count, total) = x {
-            info!("{} downloaded {} of {}", name, count, total);
-        }
-    });
+    let builder = Builder::new("amd64".into(), vec!["linux".into()], "./")
+        .expect("Failed to build the image builder");
 
-    digest.unwrap()
-}
+    builder
+        .build("https://registry-1.docker.io", CONTAINERFILE, |x| {
+            if let EvaluationUpdate::From(LayerDownloadStatus::InProgress(
+                name,
+                count,
+                total,
+            )) = x
+            {
+                info!("{} downloaded {} of {}", name, count, total);
+            }
+        })
+        .await
+        .expect("Failed to build the image");
 
-fn main() {
-    let mut rt = Runtime::new().unwrap();
-
-    let storage = Storage::new("./").expect("Unable to initialize cache");
-
-    let digest = rt.block_on(fetch_image(&storage));
-
-    let unpacker = Unpacker::new(storage, Path::new("./centos"));
-
-    unpacker
-        .unpack(digest.clone())
-        .expect("Failed to unpack the archive");
-
-    info!("Fetched an image. Its digest is {:?}", digest);
+    info!("Fetched an image");
 }

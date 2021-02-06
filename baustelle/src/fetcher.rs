@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use anyhow::{Context, Error};
 use futures::{
-    channel::mpsc,
+    executor::block_on,
     future::{self, TryFutureExt},
+    sink::{Sink, SinkExt},
     stream::{FuturesUnordered, TryStreamExt},
 };
 use registratur::v2::{
@@ -19,7 +20,7 @@ use registratur::v2::{
 use super::storage::{Storage, BLOBS_STORAGE_KEY, IMAGES_INDEX_STORAGE_KEY};
 
 /// Represents layer download update.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum LayerDownloadStatus {
     Cached(Arc<String>),
     InProgress(Arc<String>, usize, usize),
@@ -91,7 +92,7 @@ impl<'a> Fetcher<'a> {
         &self,
         image: &str,
         tag: &str,
-        updates_sub: mpsc::Sender<LayerDownloadStatus>,
+        updates_sub: impl Sink<LayerDownloadStatus> + Clone + Unpin + Send,
     ) -> String {
         let image_name = normalize_image_name(image);
         let cache_key = &format!("{}:{}", image_name, tag)[..];
@@ -191,7 +192,7 @@ impl<'a> Fetcher<'a> {
         image_name: &str,
         digest: String,
         size: usize,
-        mut updates_sub: mpsc::Sender<LayerDownloadStatus>,
+        mut updates_sub: impl Sink<LayerDownloadStatus> + Clone + Unpin + Send,
     ) {
         let digest_arc = Arc::new(digest.clone());
 
@@ -199,8 +200,11 @@ impl<'a> Fetcher<'a> {
             // This may fail for various reason, but we don't care,
             // since it is a UI code and UI does not handle
             // the progress retrieval failures.
-            let _ = updates_sub
-                .try_send(LayerDownloadStatus::Cached(digest_arc.clone()));
+            let _ = block_on(
+                updates_sub
+                    .send(LayerDownloadStatus::Cached(digest_arc.clone())),
+            );
+
             return;
         }
 
@@ -208,10 +212,8 @@ impl<'a> Fetcher<'a> {
             // This may fail for various reason, but we don't care,
             // since it is a UI code and UI does not handle
             // the progress retrieval failures.
-            let _ = updates_sub.try_send(LayerDownloadStatus::InProgress(
-                digest_arc.clone(),
-                x,
-                size,
+            let _ = block_on(updates_sub.send(
+                LayerDownloadStatus::InProgress(digest_arc.clone(), x, size),
             ));
         };
 
@@ -284,13 +286,14 @@ mod test {
             .unwrap()
     }
 
-    #[test]
-    fn integration_test_fetch_image() {
+    #[tokio::test]
+    async fn integration_test_fetch_image() {
         setup_client!(client, fetcher, dir);
 
         let (tx, _) = futures::channel::mpsc::channel(1);
 
-        test_helpers::block_on!(fetcher.fetch("nginx", "1.17.10", tx))
+        fetcher.fetch("nginx", "1.17.10", tx)
+            .await
             .expect("Failed to fetch image");
 
         let storage =
@@ -309,19 +312,19 @@ mod test {
         assert_eq!("amd64", config.architecture);
     }
 
-    #[test]
-    fn integration_test_progress() {
+    #[tokio::test]
+    async fn integration_test_progress() {
         setup_client!(client, fetcher, dir);
 
-        let (tx, rx) = futures::channel::mpsc::channel(1);
+        let (tx, rx) = futures::channel::mpsc::channel(100);
 
         let progress_future = rx.collect::<Vec<_>>();
         let fetcher_future = fetcher.fetch("nginx", "1.17.10", tx);
 
-        let (image, progress_items) = test_helpers::block_on!(future::join(
+        let (image, progress_items) = future::join(
             fetcher_future,
             progress_future
-        ));
+        ).await;
 
         image.expect("Failed to fetch image");
 

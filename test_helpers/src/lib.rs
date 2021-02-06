@@ -1,4 +1,3 @@
-pub use tokio;
 pub use mockito;
 pub use serde_yaml;
 use serde::Deserialize;
@@ -70,14 +69,6 @@ macro_rules! fixture_path {
             $file
         ))
     }
-}
-
-#[macro_export]
-macro_rules! block_on {
-    ($future:expr) => {{
-        use $crate::tokio::runtime::Runtime;
-        Runtime::new().unwrap().block_on($future)
-    }};
 }
 
 /// Generate mockito mocks using declarative (yml) definition.
