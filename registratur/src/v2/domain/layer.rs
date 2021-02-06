@@ -37,7 +37,7 @@ impl Layer {
         progress_callback: F,
     ) -> Vec<u8>
     where
-        F: FnMut(usize) + 'static + Send,
+        F: FnMut(usize) + Send,
     {
         use reqwest::{header, Method};
 

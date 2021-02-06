@@ -10,7 +10,7 @@ pub trait ReqwestResponseExt {
     /// it's hash.
     async fn read(
         self,
-        mut f: Option<impl FnMut(usize) + Send + 'static>,
+        mut f: Option<impl FnMut(usize) + Send + 'async_trait>,
         digest: Option<&str>,
     ) -> Result<Vec<u8>>;
 }
@@ -19,7 +19,7 @@ pub trait ReqwestResponseExt {
 impl ReqwestResponseExt for Response {
     async fn read(
         self,
-        mut f: Option<impl FnMut(usize) + Send + 'static>,
+        mut f: Option<impl FnMut(usize) + Send + 'async_trait>,
         digest: Option<&str>,
     ) -> Result<Vec<u8>> {
         let result = self

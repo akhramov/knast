@@ -124,8 +124,8 @@ mod test {
         manifest_index::{ManifestIndex, Platform},
     };
 
-    #[test]
-    fn docker_registry_integration() {
+    #[tokio::test]
+    async fn docker_registry_integration() {
         #[cfg(feature = "integration_testing")]
         let (url, _mocks) = ("https://registry-1.docker.io", ());
         #[cfg(not(feature = "integration_testing"))]
@@ -138,41 +138,34 @@ mod test {
             Client::build(&url).expect("Failed to build registry client");
 
         /* 0. Fetch manifest index. */
-        let index = test_helpers::block_on!(ManifestIndex::pull(
-            &client, image, "latest"
-        ))
-        .expect("Failed to fetch manifest");
+        let index = ManifestIndex::pull(&client, image, "latest")
+            .await
+            .expect("Failed to fetch manifest");
 
         let manifest_digest = &index
             .manifests
             .iter()
-            .find(|x| {
-                match &x.platform {
-                    Some(Platform {
-                        architecture, os, ..
-                    }) => architecture == "amd64" && os == "linux",
-                    None => false,
-                }
+            .find(|x| match &x.platform {
+                Some(Platform {
+                    architecture, os, ..
+                }) => architecture == "amd64" && os == "linux",
+                None => false,
             })
             .expect("Unable to find appropriate manifest in index")
             .descriptor
             .digest;
 
         /* 2. Fetch the manifest */
-        let manifest = test_helpers::block_on!(Manifest::pull(
-            &client,
-            "library/nginx",
-            manifest_digest
-        ))
-        .expect("Failed to fetch manifest");
+        let manifest =
+            Manifest::pull(&client, "library/nginx", manifest_digest)
+                .await
+                .expect("Failed to fetch manifest");
 
         /* 3. Fetch the config */
-        let config = test_helpers::block_on!(Config::pull(
-            &client,
-            "library/nginx",
-            &manifest.config.digest
-        ))
-        .expect("Failed to fetch config");
+        let config =
+            Config::pull(&client, "library/nginx", &manifest.config.digest)
+                .await
+                .expect("Failed to fetch config");
 
         assert_eq!(
             config.config.unwrap().cmd.unwrap(),
@@ -190,25 +183,23 @@ mod test {
             move |x| log::info!("Downloaded {} of {}", x, size),
         );
 
-        let actual_layer =
-            test_helpers::block_on!(future).expect("Failed to fetch layer");
+        let actual_layer = future.await.expect("Failed to fetch layer");
 
         assert_eq!(manifested_layer.size, actual_layer.len());
     }
 
-    #[test]
-    fn test_hashsum_mismatch() {
+    #[tokio::test]
+    async fn test_hashsum_mismatch() {
         let (url, _mocks) = test_helpers::mock_server!("basic.yml");
 
         /* 0. Create a client. */
         let client =
             Client::build(&url).expect("Failed to build registry client");
 
-        let err = test_helpers::block_on!(Manifest::pull(
-            &client,
-            "library/nginx",
-            "this is simply wrong"
-        )).unwrap_err();
+        let err =
+            Manifest::pull(&client, "library/nginx", "this is simply wrong")
+                .await
+                .unwrap_err();
 
         let error: &dyn std::error::Error = err.as_ref();
         assert_eq!("Content hash mismatch.", error.to_string());

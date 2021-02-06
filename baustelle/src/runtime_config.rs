@@ -142,12 +142,18 @@ impl TryFrom<(config::Container, &Path)> for Process {
 
     #[fehler::throws]
     fn try_from((config, rootfs): (config::Container, &Path)) -> Self {
+        let args = [
+            config.entrypoint.unwrap_or(vec![]),
+            config.cmd.unwrap_or(vec![]),
+        ]
+        .concat();
+
         Self {
             terminal: None,
             console_size: None,
             cwd: config.working_dir,
             env: config.env,
-            args: config.entrypoint,
+            args: Some(args),
             rlimits: None,
             user: (config.user, rootfs).try_into()?,
             hostname: None,
@@ -220,9 +226,9 @@ mod tests {
 
     // TODO: I really don't like the body of this test... Like,
     // really.
-    #[test]
+    #[tokio::test]
     #[cfg(feature = "integration_testing")]
-    fn test_conversion() {
+    async fn test_conversion() {
         use crate::{
             fetcher::Fetcher,
             storage::{Storage, BLOBS_STORAGE_KEY},
@@ -246,7 +252,9 @@ mod tests {
                 Fetcher::new(&storage, client, architecture.into(), os);
             let (tx, _) = futures::channel::mpsc::channel(1);
 
-            test_helpers::block_on!(fetcher.fetch("nginx", "1.17.10", tx))
+            fetcher
+                .fetch("nginx", "1.17.10", tx)
+                .await
                 .expect("Failed to fetch the image")
         };
 

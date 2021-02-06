@@ -98,9 +98,9 @@ mod test {
     use super::Unpacker;
     use crate::{fetcher::Fetcher, storage::Storage};
 
-    #[test]
+    #[tokio::test]
     #[cfg(feature = "integration_testing")]
-    fn test_unpacking() {
+    async fn test_unpacking() {
         let tempdir = tempfile::tempdir().expect("Failed to create a tempdir");
 
         let storage =
@@ -116,7 +116,8 @@ mod test {
                 Fetcher::new(&storage, client, architecture.into(), os);
             let (tx, _) = futures::channel::mpsc::channel(1);
 
-            test_helpers::block_on!(fetcher.fetch("nginx", "1.17.10", tx))
+            fetcher.fetch("nginx", "1.17.10", tx)
+                .await
                 .expect("Failed to fetch the image")
         };
 
@@ -128,9 +129,9 @@ mod test {
             .expect("Failed to unpack the archive");
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg(not(feature = "integration_testing"))]
-    fn test_unpacking() {
+    async fn test_unpacking() {
         #[fehler::throws(anyhow::Error)]
         fn visit_dirs(
             dir: &PathBuf,
@@ -167,7 +168,8 @@ mod test {
                 Fetcher::new(&storage, client, architecture.into(), os);
             let (tx, _) = futures::channel::mpsc::channel(1);
 
-            test_helpers::block_on!(fetcher.fetch("nginx", "1.17.10", tx))
+            fetcher.fetch("nginx", "1.17.10", tx)
+                .await
                 .expect("Failed to fetch the image")
         };
 
@@ -178,13 +180,15 @@ mod test {
             .unpack(digest)
             .expect("Failed to unpack the archive");
 
-        let result = visit_dirs(&destination, vec![])
+        let mut result = visit_dirs(&destination, vec![])
             .expect("Failed to read the directory")
             .into_iter()
             .map(|x| x.strip_prefix(&destination).unwrap().to_path_buf())
             .collect::<Vec<_>>();
 
         let expected = test_helpers::code_fixture!("unpacked_layers");
+
+        result.sort();
 
         assert_eq!(result, expected);
     }
