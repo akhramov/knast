@@ -17,7 +17,9 @@ use registratur::v2::{
     },
 };
 
-use super::storage::{Storage, BLOBS_STORAGE_KEY, IMAGES_INDEX_STORAGE_KEY};
+use super::storage::{
+    Storage, StorageEngine, BLOBS_STORAGE_KEY, IMAGES_INDEX_STORAGE_KEY,
+};
 
 /// Represents layer download update.
 #[derive(Clone, Debug)]
@@ -26,17 +28,17 @@ pub enum LayerDownloadStatus {
     InProgress(Arc<String>, usize, usize),
 }
 
-pub struct Fetcher<'a> {
-    storage: &'a Storage,
+pub struct Fetcher<'a, T: StorageEngine> {
+    storage: &'a Storage<T>,
     client: Client<'a>,
     architecture: String,
     os: Vec<String>, /* We support Linux & FreeBSD containers running
                       * alongside */
 }
 
-impl<'a> Fetcher<'a> {
+impl<'a, T: StorageEngine> Fetcher<'a, T> {
     pub fn new(
-        storage: &'a Storage,
+        storage: &'a Storage<T>,
         client: Client<'a>,
         architecture: String,
         os: Vec<String>,
@@ -154,15 +156,13 @@ impl<'a> Fetcher<'a> {
 
         manifests
             .iter()
-            .find(|ref manifest| {
-                match &manifest.platform {
-                    Some(Platform {
-                        architecture: img_arch,
-                        os: img_os,
-                        ..
-                    }) => architecture == img_arch && os.contains(&img_os),
-                    None => false,
-                }
+            .find(|ref manifest| match &manifest.platform {
+                Some(Platform {
+                    architecture: img_arch,
+                    os: img_os,
+                    ..
+                }) => architecture == img_arch && os.contains(&img_os),
+                None => false,
             })
             .map(|manifest| manifest.descriptor.digest.clone())
             .context(format!(
@@ -247,7 +247,7 @@ mod test {
     use futures::stream::StreamExt;
 
     use super::*;
-    use crate::storage::Storage;
+    use crate::storage::TestStorage as Storage;
 
     macro_rules! setup_client {
         ($var:ident, $fetcher:ident, $dir:ident) => {
@@ -276,7 +276,10 @@ mod test {
 
     use registratur::v2::{client::Client, domain::manifest::Manifest};
 
-    fn get_manifest_from_storage(storage: &Storage, key: &str) -> Manifest {
+    fn get_manifest_from_storage(
+        storage: &Storage,
+        key: &str,
+    ) -> Manifest {
         let image_digest: String =
             storage.get(IMAGES_INDEX_STORAGE_KEY, key).unwrap().unwrap();
 
@@ -292,7 +295,8 @@ mod test {
 
         let (tx, _) = futures::channel::mpsc::channel(1);
 
-        fetcher.fetch("nginx", "1.17.10", tx)
+        fetcher
+            .fetch("nginx", "1.17.10", tx)
             .await
             .expect("Failed to fetch image");
 
@@ -321,10 +325,8 @@ mod test {
         let progress_future = rx.collect::<Vec<_>>();
         let fetcher_future = fetcher.fetch("nginx", "1.17.10", tx);
 
-        let (image, progress_items) = future::join(
-            fetcher_future,
-            progress_future
-        ).await;
+        let (image, progress_items) =
+            future::join(fetcher_future, progress_future).await;
 
         image.expect("Failed to fetch image");
 
@@ -333,14 +335,12 @@ mod test {
 
         let mut downloaded_layers = progress_items.iter().fold(
             Vec::<String>::new(),
-            |mut acc, item| {
-                match item {
-                    LayerDownloadStatus::InProgress(layer, x, y) if x == y => {
-                        acc.push(layer.to_string());
-                        acc
-                    }
-                    _ => acc,
+            |mut acc, item| match item {
+                LayerDownloadStatus::InProgress(layer, x, y) if x == y => {
+                    acc.push(layer.to_string());
+                    acc
                 }
+                _ => acc,
             },
         );
 

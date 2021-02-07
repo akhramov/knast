@@ -7,31 +7,29 @@ mod containerfile;
 
 mod archive;
 
-use std::{convert::AsRef, io::Read, path::{Path, PathBuf}};
+use std::{io::Read, path::PathBuf};
 
 use anyhow::Error;
 use futures::{future, StreamExt};
 
-use containerfile::{Builder as ContainerfileBuilder};
+use crate::storage::{Storage, StorageEngine};
+use containerfile::Builder as ContainerfileBuilder;
 pub use containerfile::EvaluationUpdate;
 pub use fetcher::LayerDownloadStatus;
-use storage::Storage;
 
-pub struct Builder {
+pub struct Builder<T: StorageEngine> {
     architecture: String,
     os: Vec<String>,
-    storage: Storage,
+    storage: Storage<T>,
 }
 
-impl Builder {
+impl<T: StorageEngine> Builder<T> {
     #[fehler::throws]
     pub fn new(
         architecture: String,
         os: Vec<String>,
-        path: impl AsRef<Path>,
+        storage: Storage<T>,
     ) -> Self {
-        let storage = Storage::new(&path)?;
-
         Self {
             architecture,
             os,
@@ -76,7 +74,9 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+
     use super::*;
+    use crate::storage::{StorageEngine, TestStorage as Storage};
 
     #[test]
     fn test_image_build_initializer() {
@@ -105,11 +105,12 @@ mod tests {
     }
 
     #[fehler::throws]
-    fn construct_builder() -> (Builder, TempDir) {
+    fn construct_builder() -> (Builder<impl StorageEngine>, TempDir) {
         let tmpdir = tempfile::tempdir().unwrap();
+        let storage = Storage::new(tmpdir.path()).unwrap();
 
         (
-            Builder::new("amd64".into(), vec!["linux".into()], tmpdir.path())?,
+            Builder::new("amd64".into(), vec!["linux".into()], storage)?,
             tmpdir,
         )
     }

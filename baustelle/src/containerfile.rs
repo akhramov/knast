@@ -10,8 +10,7 @@ use futures::{
     channel::mpsc::{unbounded, SendError, UnboundedSender},
     future::{self, Future},
     stream::Stream,
-    SinkExt,
-    TryFutureExt,
+    SinkExt, TryFutureExt,
 };
 
 use uuid::Uuid;
@@ -24,7 +23,7 @@ use registratur::v2::{
 use crate::{
     fetcher::{Fetcher, LayerDownloadStatus},
     runtime_config::RuntimeConfig,
-    storage::{Storage, BLOBS_STORAGE_KEY},
+    storage::{Storage, StorageEngine, BLOBS_STORAGE_KEY},
     unpacker::Unpacker,
 };
 
@@ -33,19 +32,19 @@ pub enum EvaluationUpdate {
     From(LayerDownloadStatus),
 }
 
-pub struct Builder<'a> {
-    fetcher: Fetcher<'a>,
-    storage: &'a Storage,
+pub struct Builder<'a, T: StorageEngine> {
+    fetcher: Fetcher<'a, T>,
+    storage: &'a Storage<T>,
     container_folder: PathBuf,
 }
 
-impl<'a> Builder<'a> {
+impl<'a, T: StorageEngine> Builder<'a, T> {
     #[fehler::throws]
     pub fn new(
         registry_url: &'a str,
         architecture: String,
         os: Vec<String>,
-        storage: &'a Storage,
+        storage: &'a Storage<T>,
     ) -> Self {
         let client = Client::build(registry_url)?;
         let fetcher = Fetcher::new(storage, client, architecture, os);
@@ -82,9 +81,8 @@ impl<'a> Builder<'a> {
 
         let folder = self.container_folder.clone();
 
-        let completion_future = future::try_join_all(result).and_then(|_| {
-            future::ok(folder)
-        });
+        let completion_future =
+            future::try_join_all(result).and_then(|_| future::ok(folder));
 
         (receiver, completion_future)
     }
@@ -158,7 +156,7 @@ mod tests {
     use futures::StreamExt;
 
     use super::*;
-    use crate::storage::Storage;
+    use crate::storage::TestStorage as Storage;
 
     #[tokio::test]
     async fn test_interpretation() {
@@ -184,7 +182,8 @@ mod tests {
         let (_, result) =
             future::join(updates.collect::<Vec<_>>(), complete_future).await;
 
-        let container_folder = result.expect("Unable to enterpret containerfile");
+        let container_folder =
+            result.expect("Unable to enterpret containerfile");
 
         assert!(container_folder.join("rootfs/etc/passwd").exists());
 

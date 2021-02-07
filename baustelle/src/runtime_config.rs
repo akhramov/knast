@@ -231,7 +231,7 @@ mod tests {
     async fn test_conversion() {
         use crate::{
             fetcher::Fetcher,
-            storage::{Storage, BLOBS_STORAGE_KEY},
+            storage::{TestStorage as Storage, BLOBS_STORAGE_KEY},
             unpacker::Unpacker,
         };
 

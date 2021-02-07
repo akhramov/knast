@@ -7,6 +7,7 @@ extern crate registratur;
 extern crate tokio;
 
 use baustelle::{Builder, EvaluationUpdate, LayerDownloadStatus};
+use storage::SledStorage;
 
 const CONTAINERFILE: &[u8] = r#"
 FROM centos:latest
@@ -23,7 +24,8 @@ async fn main() {
 
     info!("Fetching a centos image");
 
-    let builder = Builder::new("amd64".into(), vec!["linux".into()], "./")
+    let storage = SledStorage::new("./").unwrap();
+    let builder = Builder::new("amd64".into(), vec!["linux".into()], storage)
         .expect("Failed to build the image builder");
 
     builder

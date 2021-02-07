@@ -5,15 +5,15 @@ use anyhow::{anyhow, Context, Error, Result};
 use registratur::v2::domain::manifest::Manifest;
 
 use super::archive::Archive;
-use super::storage::{Storage, BLOBS_STORAGE_KEY};
+use super::storage::{Storage, StorageEngine, BLOBS_STORAGE_KEY};
 
-pub struct Unpacker<'a> {
-    storage: &'a Storage,
+pub struct Unpacker<'a, T: StorageEngine> {
+    storage: &'a Storage<T>,
     destination: &'a Path,
 }
 
-impl<'a> Unpacker<'a> {
-    pub fn new(storage: &'a Storage, destination: &'a Path) -> Self {
+impl<'a, T: StorageEngine> Unpacker<'a, T> {
+    pub fn new(storage: &'a Storage<T>, destination: &'a Path) -> Self {
         Self {
             storage,
             destination,
@@ -96,7 +96,7 @@ mod test {
     use registratur::v2::client::Client;
 
     use super::Unpacker;
-    use crate::{fetcher::Fetcher, storage::Storage};
+    use crate::{fetcher::Fetcher, storage::TestStorage as Storage};
 
     #[tokio::test]
     #[cfg(feature = "integration_testing")]
@@ -116,7 +116,8 @@ mod test {
                 Fetcher::new(&storage, client, architecture.into(), os);
             let (tx, _) = futures::channel::mpsc::channel(1);
 
-            fetcher.fetch("nginx", "1.17.10", tx)
+            fetcher
+                .fetch("nginx", "1.17.10", tx)
                 .await
                 .expect("Failed to fetch the image")
         };
@@ -168,7 +169,8 @@ mod test {
                 Fetcher::new(&storage, client, architecture.into(), os);
             let (tx, _) = futures::channel::mpsc::channel(1);
 
-            fetcher.fetch("nginx", "1.17.10", tx)
+            fetcher
+                .fetch("nginx", "1.17.10", tx)
                 .await
                 .expect("Failed to fetch the image")
         };
