@@ -43,49 +43,42 @@ pub fn delete_default() {
 #[cfg(test)]
 mod test {
     use std::process::Command;
-    struct DroppableRoute;
+    use super::*;
 
-    impl DroppableRoute {
-        #[fehler::throws(anyhow::Error)]
-        fn new() -> Self {
-            super::add_default("127.0.0.1")?;
-
-            DroppableRoute
-        }
-    }
-
-    impl Drop for DroppableRoute {
-        fn drop(&mut self) {
-            super::delete_default();
-        }
-    }
-
-    #[test]
+    #[test_helpers::jailed_test]
     fn test_add_default() {
-        let _route =
-            DroppableRoute::new().expect("Failed to add default route");
+        setup_lo();
+        add_default("127.0.0.1").expect("failed to add default route");
 
-        let netstat_output = Command::new("netstat")
-            .arg("-rn")
-            .output()
-            .expect("Failed to execute netstat");
-
-        let content = String::from_utf8(netstat_output.stdout).unwrap();
+        let content = routing_tables_content()
+            .expect("(netstat) failed to get routing tables content");
 
         assert!(content.contains("default            127.0.0.1"));
     }
 
-    #[test]
+    #[test_helpers::jailed_test]
     fn test_delete_default() {
-        DroppableRoute::new().expect("Failed to add default route"); // return value dropped
+        setup_lo();
+        add_default("127.0.0.1").expect("failed to add default route");
+        delete_default().expect("failed to delete default route");
 
-        let netstat_output = Command::new("netstat")
-            .arg("-rn")
-            .output()
-            .expect("Failed to execute netstat");
-
-        let content = String::from_utf8(netstat_output.stdout).unwrap();
+        let content = routing_tables_content()
+            .expect("(netstat) failed to get routing tables content");
 
         assert!(!content.contains("default            127.0.0.1"));
+    }
+
+    #[fehler::throws]
+    fn routing_tables_content() -> String {
+        String::from_utf8(Command::new("netstat").arg("-rn").output()?.stdout)?
+    }
+
+    fn setup_lo() {
+        use crate::interface::Interface;
+
+        Interface::new("lo0")
+            .expect("failed to get iface socket")
+            .address("127.0.0.1", "127.255.255.255", "255.0.0.0")
+            .expect("failed to assign expected address");
     }
 }

@@ -263,18 +263,6 @@ mod tests {
 
     use super::Interface;
 
-    impl Drop for Interface {
-        fn drop(&mut self) {
-            use std::{thread, time};
-            /* Jail does not return the iface right away upon
-             * destruction */
-            let duration = time::Duration::from_millis(50);
-            thread::sleep(duration);
-
-            self.destroy();
-        }
-    }
-
     #[fehler::throws(anyhow::Error)]
     fn create_interface(r#type: &str, name: &str) -> Interface {
         Interface::new(r#type)?.create()?.name(name)?.address(
@@ -284,7 +272,7 @@ mod tests {
         )?
     }
 
-    #[test]
+    #[test_helpers::jailed_test]
     fn test_bridge_creation() {
         let _iface = create_interface("bridge", "werft0")
             .expect("Failed to create interface");
@@ -301,7 +289,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_helpers::jailed_test]
     fn test_bridge_addm() {
         let bridge = create_interface("bridge", "werft0")
             .expect("Failed to create interface");
@@ -327,7 +315,7 @@ mod tests {
         assert!(content.contains("member: werftpair2"));
     }
 
-    #[test]
+    #[test_helpers::jailed_test]
     fn test_bridge_delm() {
         let bridge = create_interface("bridge", "werft0")
             .expect("Failed to create interface");
@@ -355,7 +343,7 @@ mod tests {
         assert!(!content.contains("member: werftpair2"));
     }
 
-    #[test]
+    #[test_helpers::jailed_test]
     fn test_bridge_destroy() {
         Command::new("ifconfig")
             .arg("bridge")
@@ -382,7 +370,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_helpers::jailed_test]
     fn test_vnet() {
         use jail::process::Jailed;
         use jail::StoppedJail;
@@ -390,9 +378,9 @@ mod tests {
         let jail =
             StoppedJail::new("/").param("vnet", jail::param::Value::Int(1));
 
-        let running = jail.start().expect("Couldn't start Jail");
+        let running = jail.start().expect("Couldn't start jail");
 
-        let mut bridge = create_interface("bridge", "werft0").unwrap();
+        let bridge = create_interface("bridge", "werft0").unwrap();
 
         bridge.vnet(running.jid).unwrap();
 

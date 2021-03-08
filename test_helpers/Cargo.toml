@@ -6,6 +6,11 @@ authors = ["akhramov"]
 edition = "2018"
 
 [dependencies]
+bincode = "1.2.1"
+jail = { git = "https://github.com/fubarnetes/libjail-rs", branch = "dev" }
+memmap = "0.7.0"
+nix = "0.17.0"
 mockito = "0.25.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
+procedural_macros = { path = "./procedural_macros" }
