@@ -20,6 +20,7 @@ use bindings::{
     pfioc_trans_pfioc_trans_e, pfr_addr, pfr_table, PFI_AFLAG_NOALIAS,
     PFR_TFLAG_PERSIST, PF_ADDR_DYNIFTL, PF_NAT, PF_RULESET_NAT,
 };
+use common_lib::AsSignedBytes;
 use ipnetwork::Ipv4Network;
 use libc::{ioctl, AF_INET};
 
@@ -296,22 +297,6 @@ fn transaction_struct(
         },
         boxed_nat_request,
     )
-}
-
-trait AsSignedBytes {
-    fn as_signed_bytes(&self) -> &[i8] {
-        let bytes = unsafe { self.bytes().align_to() };
-
-        bytes.1
-    }
-
-    fn bytes(&self) -> &[u8];
-}
-
-impl AsSignedBytes for &str {
-    fn bytes(&self) -> &[u8] {
-        self.as_bytes()
-    }
 }
 
 #[cfg(test)]

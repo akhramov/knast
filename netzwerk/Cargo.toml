@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+common_lib = { path = "../common_lib" }
 fehler = { git = "https://github.com/withoutboats/fehler" }
 libc = "0.2.71"
 ipnetwork = "0.17.0"
@@ -16,4 +17,4 @@ bindgen = "0.57"
 [dev-dependencies]
 test_helpers = { path = "../test_helpers" }
 jail = { git = "https://github.com/fubarnetes/libjail-rs", branch = "dev" }
-nix = "0.17.0"
+nix = "0.20.0"

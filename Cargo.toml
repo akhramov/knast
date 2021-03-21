@@ -12,6 +12,8 @@ tokio = { version = "1.1.1", features = ["full"] }
 [workspace]
 members = [
     "baustelle",
+    "common_lib",
+    "knast",
     "netzwerk",
     "registratur",
     "storage",

@@ -51,7 +51,6 @@ impl<'a, T: StorageEngine> Builder<'a, T> {
         let container_uuid = format!("{}", Uuid::new_v4());
         let container_folder =
             storage.folder().join("containers").join(&container_uuid);
-
         fs::create_dir_all(&container_folder)?;
 
         Self {
