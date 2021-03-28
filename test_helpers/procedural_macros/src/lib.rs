@@ -29,7 +29,7 @@ pub fn jailed_test(_attrs: TokenStream, item: TokenStream) -> TokenStream {
             .start()
             .expect("Couldn't start jail");
 
-        match fork() {
+        match unsafe { fork() } {
             Ok(ForkResult::Child) => {
                 jail.attach().unwrap();
                 let result = std::panic::catch_unwind(|| {

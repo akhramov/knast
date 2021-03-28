@@ -51,7 +51,7 @@ fn main() {
     let name = create_interfaces()
         .expect("Failed to create interfaces");
 
-    match fork() {
+    match unsafe { fork() } {
         Ok(ForkResult::Child) => {
             if unsafe { jail_attach(JAIL_NUMBER) } < 0 {
                 panic!("Failed to attach to jail {}", JAIL_NUMBER);

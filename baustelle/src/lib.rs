@@ -1,5 +1,5 @@
 mod fetcher;
-mod runtime_config;
+pub mod runtime_config;
 mod storage;
 mod unpacker;
 

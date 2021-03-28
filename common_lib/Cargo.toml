@@ -1,0 +1,7 @@
+[package]
+name = "common_lib"
+version = "0.1.0"
+authors = ["Artem Khramov <akhramov@pm.me>"]
+edition = "2018"
+
+[dependencies]

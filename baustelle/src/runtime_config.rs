@@ -31,7 +31,8 @@ pub struct Mount {
     pub destination: String,
     pub source: Option<String>,
     pub options: Option<Vec<String>>,
-    pub r#type: Option<String>,
+    // TODO (doc): diverges from OCI
+    pub r#type: String,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
