@@ -1,0 +1,60 @@
+{
+  "ociVersion": "1.0",
+  "root": {
+    "path": "./rootfs",
+    "readonly": false
+  },
+  "mounts": [
+    {
+      "destination": "/dev",
+      "source": "devfs",
+      "options": null,
+      "type": "devfs"
+    },
+    {
+      "destination": "/sys",
+      "source": "linsysfs",
+      "options": [
+        "nosuid",
+        "noexec",
+        "ro"
+      ],
+      "type": "linsysfs"
+    },
+    {
+      "destination": "/proc",
+      "source": "linprocfs",
+      "options": [
+        "nosuid",
+        "noexec",
+        "ro"
+      ],
+      "type": "linprocfs"
+    }
+  ],
+  "process": {
+    "terminal": null,
+    "consoleSize": null,
+    "cwd": "/",
+    "env": [
+      "SETTING=env_var",
+      "WORKED=well"
+    ],
+    "args": [
+      "env"
+    ],
+    "rlimits": null,
+    "user": {
+      "uid": 1000,
+      "gid": 1000,
+      "umask": null,
+      "additionalGids": null
+    },
+    "hostname": null
+  },
+  "hooks": null,
+  "annotations": {
+    "io.container.manager": "werft",
+    "org.opencontainers.image.stopSignal": "15"
+  }
+}

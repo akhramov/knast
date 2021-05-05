@@ -23,6 +23,20 @@ pub trait StorageEngine {
         value: impl AsRef<[u8]>,
     ) -> Result<(), Error>;
 
+    fn compare_and_swap(
+        &self,
+        collection: impl AsRef<[u8]>,
+        key: impl AsRef<[u8]>,
+        old_value: impl AsRef<[u8]>,
+        new_value: impl AsRef<[u8]>,
+    ) -> Result<(), Error>;
+
+    fn remove(
+        &self,
+        collection: impl AsRef<[u8]>,
+        key: impl AsRef<[u8]>,
+    ) -> Result<(), Error>;
+
     fn exists(
         &self,
         collection: impl AsRef<[u8]>,
@@ -54,7 +68,8 @@ impl<T: StorageEngine> Storage<T> {
         store: impl AsRef<[u8]>,
         key: impl AsRef<[u8]>,
     ) -> Option<D> {
-        self.inner.get(store, key)?
+        self.inner
+            .get(store, key)?
             .map(|value| bincode::deserialize(&value))
             .transpose()?
     }
@@ -71,6 +86,32 @@ impl<T: StorageEngine> Storage<T> {
         self.inner.put(store, key, serialized_value)?;
 
         value
+    }
+
+    #[fehler::throws]
+    pub fn compare_and_swap<S: Serialize>(
+        &self,
+        store: impl AsRef<[u8]>,
+        key: impl AsRef<[u8]>,
+        old_value: S,
+        new_value: S,
+    ) -> S {
+        let serialized_old_value = bincode::serialize(&old_value)?;
+        let serialized_new_value = bincode::serialize(&new_value)?;
+
+        self.inner.compare_and_swap(
+            store,
+            key,
+            serialized_old_value,
+            serialized_new_value,
+        )?;
+
+        new_value
+    }
+
+    #[fehler::throws]
+    pub fn remove(&self, store: impl AsRef<[u8]>, key: impl AsRef<[u8]>) {
+        self.inner.remove(store, key)?;
     }
 
     #[fehler::throws]
@@ -100,8 +141,8 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache =
-            Storage::<sled::Db>::new(dir.path()).expect("Unable to initialize cache");
+        let cache = Storage::<sled::Db>::new(dir.path())
+            .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
         let tree = b"test";
@@ -116,5 +157,70 @@ mod test {
         assert_eq!(stored_value, value);
         assert_eq!(cache.folder(), dir.path());
         assert!(cache.exists(tree, key).unwrap())
+    }
+
+    #[test]
+    fn test_compare_and_swap() {
+        let dir =
+            tempfile::tempdir().expect("failed to create a tmp directory");
+
+        let cache = Storage::<sled::Db>::new(dir.path())
+            .expect("Unable to initialize cache");
+
+        let value: Vec<u8> = b"ipsum"[..].into();
+        let new_value: Vec<u8> = b"dolor"[..].into();
+        let tree = b"test";
+        let key = b"lorem";
+
+        // Put the value into the tree.
+        cache
+            .put(tree, key, &value)
+            .expect("Failed to put a value into the cache");
+        // Cas #1: swap the old value with the new one
+        cache
+            .compare_and_swap(tree, key, &value, &new_value)
+            .expect("CAS failed unexpectedly");
+
+        let stored_value: Vec<u8> = cache.get(tree, key).unwrap().unwrap();
+        assert_eq!(stored_value, new_value);
+        // Cas #2: swap the old value back
+        cache
+            .compare_and_swap(tree, key, &new_value, &value)
+            .expect("CAS failed unexpectedly");
+
+        let stored_value: Vec<u8> = cache.get(tree, key).unwrap().unwrap();
+        assert_eq!(stored_value, value);
+
+        // Cas #3: attempt invalid swap
+        let err = cache
+            .compare_and_swap(tree, key, &new_value, &value)
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Compare and swap conflict"));
+    }
+
+    #[test]
+    fn test_remove() {
+        let dir =
+            tempfile::tempdir().expect("failed to create a tmp directory");
+
+        let cache = Storage::<sled::Db>::new(dir.path())
+            .expect("Unable to initialize cache");
+
+        let value: Vec<u8> = b"ipsum"[..].into();
+        let tree = b"test";
+        let key = b"lorem";
+
+        // Put the value into the tree.
+        cache
+            .put(tree, key, &value)
+            .expect("Failed to put a value into the cache");
+
+        cache
+            .remove(tree, key)
+            .expect("Failed to remove a value from the cache");
+
+        let stored_value: Option<Vec<u8>> = cache.get(tree, key).unwrap();
+        assert_eq!(stored_value, None);
     }
 }

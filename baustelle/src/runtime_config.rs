@@ -1,6 +1,6 @@
 mod user;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::path::{Path, PathBuf};
 
@@ -9,7 +9,7 @@ use registratur::v2::domain::config;
 use serde::{Deserialize, Serialize};
 
 /// Represents [OCI Container Configuration file](https://github.com/opencontainers/runtime-spec/blob/v1.0.0/config.md)
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct RuntimeConfig {
     #[serde(rename = "ociVersion")]
     pub oci_version: String,
@@ -17,16 +17,16 @@ pub struct RuntimeConfig {
     pub mounts: Option<Vec<Mount>>,
     pub process: Option<Process>,
     pub hooks: Option<Hooks>,
-    pub annotations: Option<HashMap<String, String>>,
+    pub annotations: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Root {
     pub path: PathBuf,
     pub readonly: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Mount {
     pub destination: String,
     pub source: Option<String>,
@@ -35,7 +35,7 @@ pub struct Mount {
     pub r#type: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Process {
     pub terminal: Option<bool>,
     #[serde(rename = "consoleSize")]
@@ -49,20 +49,20 @@ pub struct Process {
     /* commandLine omitted */
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ConsoleSize {
     pub height: u32,
     pub width: u32,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Rlimit {
     pub r#type: String,
     pub soft: u32,
     pub hard: u32,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct User {
     pub uid: u32,
     pub gid: u32,
@@ -71,7 +71,7 @@ pub struct User {
     pub additional_gids: Option<Vec<u32>>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Hooks {
     pub prestart: Option<Vec<Hook>>,
     #[serde(rename = "createRuntime")]
@@ -84,7 +84,7 @@ pub struct Hooks {
     pub poststop: Option<Vec<Hook>>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Hook {
     pub path: String,
     pub args: Option<Vec<String>>,
@@ -105,8 +105,8 @@ impl TryFrom<(config::Config, &Path)> for RuntimeConfig {
 
         Self {
             oci_version: "1.0".into(),
-            root: Some(rootfs.try_into()?),
-            mounts: None,
+            root: Some(rootfs.into()),
+            mounts: Some(generate_mounts(config.os)),
             process,
             hooks: None,
             annotations: Some(annotations),
@@ -114,8 +114,8 @@ impl TryFrom<(config::Config, &Path)> for RuntimeConfig {
     }
 }
 
-fn generate_annotations() -> HashMap<String, String> {
-    let mut annotations = HashMap::new();
+fn generate_annotations() -> BTreeMap<String, String> {
+    let mut annotations = BTreeMap::new();
 
     // TODO: something meaningful, or at least adhere to OCI
     // spec :)
@@ -126,11 +126,8 @@ fn generate_annotations() -> HashMap<String, String> {
     annotations
 }
 
-impl TryFrom<&Path> for Root {
-    type Error = Error;
-
-    #[fehler::throws]
-    fn try_from(rootfs: &Path) -> Self {
+impl From<&Path> for Root {
+    fn from(rootfs: &Path) -> Self {
         Self {
             path: rootfs.into(),
             readonly: Some(false),
@@ -180,6 +177,47 @@ impl TryFrom<(Option<String>, &Path)> for User {
         }
     }
 }
+
+fn generate_mounts(os: String) -> Vec<Mount> {
+    let mut mounts = vec![Mount {
+        destination: "/dev".into(),
+        r#type: "devfs".into(),
+        source: Some("devfs".into()),
+        options: None,
+    }];
+
+    match &os[..] {
+        "linux" => {
+            mounts.extend(vec![
+                Mount {
+                    destination: "/sys".into(),
+                    r#type: "linsysfs".into(),
+                    source: Some("linsysfs".into()),
+                    options: Some(vec![
+                        "nosuid".into(),
+                        "noexec".into(),
+                        "ro".into(),
+                    ]),
+                },
+                Mount {
+                    destination: "/proc".into(),
+                    r#type: "linprocfs".into(),
+                    source: Some("linprocfs".into()),
+                    options: Some(vec![
+                        "nosuid".into(),
+                        "noexec".into(),
+                        "ro".into(),
+                    ]),
+                },
+            ].into_iter());
+        }
+        "freebsd" => (),
+        os => panic!("Unsupported OS {:?}", os),
+    }
+
+    mounts
+}
+
 
 #[cfg(test)]
 mod tests {

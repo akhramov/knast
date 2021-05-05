@@ -1,9 +1,11 @@
-/// During OCI runtime creation, we need to mount directories, in
-/// particular /dev. However, giving the container access to all device
-/// nodes is dangerous. The idiomatic tool for this is devfs control
-/// facilities, which allows us to dynamically hide & unhide device nodes
-/// from the mounted subsystem.
-/// This module replicates devfs(8) behavior to hide devfs nodes from the jail.
+/// During OCI runtime creation, we need to mount
+/// directories, in particular /dev. However, giving the
+/// container access to all device nodes is dangerous. The
+/// idiomatic tool for this is devfs control facilities,
+/// which allows us to dynamically hide & unhide device
+/// nodes from the mounted subsystem.
+/// This module replicates devfs(8) behavior to hide devfs
+/// nodes from the jail.
 use std::{
     convert::AsRef, fs::File, io::Error as StdError, mem,
     os::unix::io::AsRawFd, path::Path,
@@ -88,8 +90,7 @@ mod tests {
 
     impl<'a> Drop for MountedDirectory<'a> {
         fn drop(&mut self) {
-            unmount(&self.path)
-                .expect("failed to unmount directory");
+            unmount(&self.path).expect("failed to unmount directory");
         }
     }
 

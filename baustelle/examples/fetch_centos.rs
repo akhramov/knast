@@ -23,8 +23,8 @@ async fn main() {
     env_logger::init();
 
     info!("Fetching a centos image");
-
-    let storage = SledStorage::new("./").unwrap();
+    let current_dir = std::env::current_dir().unwrap();
+    let storage = SledStorage::new(current_dir).unwrap();
     let builder = Builder::new("amd64".into(), vec!["linux".into()], storage)
         .expect("Failed to build the image builder");
 

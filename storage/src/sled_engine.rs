@@ -39,6 +39,30 @@ impl StorageEngine for sled::Db {
     }
 
     #[fehler::throws]
+    fn compare_and_swap(
+        &self,
+        collection: impl AsRef<[u8]>,
+        key: impl AsRef<[u8]>,
+        old_value: impl AsRef<[u8]>,
+        new_value: impl AsRef<[u8]>,
+    ) {
+        let tree = self.open_tree(collection)?;
+
+        tree.compare_and_swap(
+            key.as_ref(),
+            Some(old_value.as_ref()),
+            Some(new_value.as_ref()),
+        )?.map_err(|x| {println!("{:?}", x); x})?;
+    }
+
+    #[fehler::throws]
+    fn remove(&self, collection: impl AsRef<[u8]>, key: impl AsRef<[u8]>) {
+        let tree = self.open_tree(collection)?;
+
+        tree.remove(key.as_ref())?;
+    }
+
+    #[fehler::throws]
     fn exists(
         &self,
         collection: impl AsRef<[u8]>,
@@ -50,7 +74,6 @@ impl StorageEngine for sled::Db {
     }
 
     async fn flush(&self) -> Result<usize, Error> {
-        self.flush_async().await
-            .map_err(Error::from)
+        self.flush_async().await.map_err(Error::from)
     }
 }
