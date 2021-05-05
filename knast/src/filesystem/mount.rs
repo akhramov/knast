@@ -13,23 +13,34 @@ pub fn mount<'a>(
     let kind = kind.as_bytes()?;
     let source = source.as_bytes()?;
     let destination = destination.as_bytes()?;
+    let options: Vec<_> = options
+        .flat_map(|option| {
+            let mut split = option.as_ref().split("=");
+            let key = [split.next().unwrap_or("").as_bytes(), b"\0"].concat();
+            let value =
+                [split.next().unwrap_or("").as_bytes(), b"\0"].concat();
 
-    let mut iovecs = vec![
-        IoSlice::new(b"fstype\0"),
-        IoSlice::new(kind.as_slice()),
-        IoSlice::new(b"fspath\0"),
-        IoSlice::new(destination.as_slice()),
-        IoSlice::new(b"from\0"),
-        IoSlice::new(source.as_slice()),
-        IoSlice::new(b"errmsg\0"),
-        IoSlice::new(&[0; 255]),
-    ];
+            vec![key, value]
+        })
+        .collect();
 
-    for key in options {
-        for option in key.as_ref().split("=") {
-            iovecs.push(IoSlice::new(option.as_bytes()));
-        }
-    }
+    let iovecs: Vec<_> = options
+        .iter()
+        .map(|x| IoSlice::new(x))
+        .chain(
+            vec![
+                IoSlice::new(b"fstype\0"),
+                IoSlice::new(kind.as_slice()),
+                IoSlice::new(b"fspath\0"),
+                IoSlice::new(destination.as_slice()),
+                IoSlice::new(b"from\0"),
+                IoSlice::new(source.as_slice()),
+                IoSlice::new(b"errmsg\0"),
+                IoSlice::new(&[0; 255]),
+            ]
+            .into_iter(),
+        )
+        .collect();
 
     let slice = iovecs.as_slice();
 

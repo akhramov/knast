@@ -1,0 +1,4 @@
+coreutils filter=lfs diff=lfs merge=lfs -text
+*.gz filter=lfs diff=lfs merge=lfs -text
+*.so* filter=lfs diff=lfs merge=lfs -text
+**/rootfs/**/* filter=lfs diff=lfs merge=lfs -text
