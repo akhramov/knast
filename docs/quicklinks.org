@@ -1,0 +1,36 @@
+* Restricting mounted devfs nodes using rulesets:
+
+#+BEGIN_SRC sh
+mount -o ruleset=5 -t devfs devfs /path/to/jail
+#+END_SRC
+
+5 is default ruleset for vnet jails. See /etc/defaults/devfs.rules
+
+* VNET jails
+
+- [[https://issue.freebsdfoundation.org/publication/?m=33057&i=651491&p=23&ver=html5][FreeBSD Journal Entry]]
+
+Firewall configuration
+
+#+BEGIN_SRC pf
+ext_if="lagg0"
+
+table <jails> persist
+nat on $ext_if from <jails> to any -> ($ext_if:0)
+#+END_SRC
+
+Add jails network to <jails> table.
+
+#+BEGIN_SRC sh
+pfctl -t jails -T add 10.0.0.0/24
+#+END_SRC
+
+And please never ever forget following
+
+#+BEGIN_SRC sh
+sysctl net.inet.ip.forwarding=1
+#+END_SRC
+
+* PF firewall
+
+  pfctl -N -f /etc/pf.conf

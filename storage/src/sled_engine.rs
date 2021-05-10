@@ -2,7 +2,6 @@ use std::path::Path;
 
 use anyhow::Error;
 use async_trait::async_trait;
-use sled;
 
 use super::StorageEngine;
 
@@ -52,7 +51,7 @@ impl StorageEngine for sled::Db {
             key.as_ref(),
             Some(old_value.as_ref()),
             Some(new_value.as_ref()),
-        )?.map_err(|x| {println!("{:?}", x); x})?;
+        )??;
     }
 
     #[fehler::throws]

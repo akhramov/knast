@@ -42,8 +42,7 @@ pub trait Mountable {
         mount::unmount(&prefixed_destination(rootfs, self.destination()))?;
     }
 
-    #[fehler::throws]
-    fn post_mount_hooks(&self, rootfs: impl AsRef<Path>);
+    fn post_mount_hooks(&self, rootfs: impl AsRef<Path>) -> Result<(), Error>;
 
     fn kind(&self) -> &String;
     fn source(&self) -> &String;
