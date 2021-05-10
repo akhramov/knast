@@ -3,7 +3,7 @@ use std::{
     process::Command,
 };
 
-use libc::{gid_t, setgid, setuid, uid_t};
+use libc::{setuid, uid_t};
 
 // A workaround for https://github.com/fubarnetes/libjail-rs/issues/103
 pub trait CommandExt {

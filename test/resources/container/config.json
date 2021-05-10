@@ -41,7 +41,8 @@
       "WORKED=well"
     ],
     "args": [
-      "env"
+      "sleep",
+      "1000"
     ],
     "rlimits": null,
     "user": {

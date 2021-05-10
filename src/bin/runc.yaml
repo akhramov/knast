@@ -1,0 +1,48 @@
+name: knast-runc
+version: "0.0.1"
+author: Artem K. <akhramov+knast@pm.me>
+about: OCI-compatible runc implementation atop of FreeBSD jails
+args: []
+default: help
+subcommands:
+    - state:
+        about: Query container state
+        version: "0.0.1"
+        args:
+            - ID:
+                about: Container identifier
+                required: true
+    - create:
+        about: Create container ID from OCI runtime BUNDLE
+        version: "0.0.1"
+        args:
+            - ID:
+                about: Container identifier
+                required: true
+            - BUNDLE:
+                about: OCI runtime bundle
+                required: true
+    - start:
+        about: Start container ID
+        version: "0.0.1"
+        args:
+            - ID:
+                about: Container identifier
+                required: true
+    - kill:
+        about: Send the specified SIGNAL to container ID
+        version: "0.0.1"
+        args:
+            - ID:
+                about: Container identifier
+                required: true
+            - SIGNAL:
+                about: Signal to send to container
+                required: true
+    - delete:
+        about: Delete container ID
+        version: "0.0.1"
+        args:
+            - ID:
+                about: Container identifier
+                required: true

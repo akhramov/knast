@@ -1,6 +1,7 @@
 mod sled_engine;
+mod arc_engine;
 
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 use anyhow::Error;
 use async_trait::async_trait;
@@ -46,7 +47,7 @@ pub trait StorageEngine {
     async fn flush(&self) -> Result<usize, Error>;
 }
 
-pub type SledStorage = Storage<sled::Db>;
+pub type SledStorage = Storage<Arc<sled::Db>>;
 
 pub struct Storage<T: StorageEngine> {
     inner: Box<T>,
@@ -134,6 +135,8 @@ impl<T: StorageEngine> Storage<T> {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use super::Storage;
 
     #[test]
@@ -141,7 +144,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<sled::Db>::new(dir.path())
+        let cache = Storage::<Arc<sled::Db>>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
@@ -164,7 +167,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<sled::Db>::new(dir.path())
+        let cache = Storage::<Arc<sled::Db>>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
@@ -204,7 +207,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<sled::Db>::new(dir.path())
+        let cache = Storage::<Arc<sled::Db>>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
