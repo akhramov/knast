@@ -1,0 +1,141 @@
+* KNAST
+
+Knast is FreeBSD experimental toolkit for building a modern
+container infrastructure.
+This is a research project project not intended to be used in
+production. See [[Goals]].
+
+
+** Status
+Currently, knast provides an OCI-compatible container runtime, which
+diverges from the [[https://github.com/opencontainers/runc][etalon realization]] in some places. Namely,
+
+- ~runc start~ doesn't detach process.
+- ~runc kill~ cannot be applied to ~created~ process.
+- Non-standard extensions, such as ~runc run~ are not implemented.
+
+** Kernel requirements
+Knast runs on amd64 FreeBSD 13.0-STABLE Kernel and newer. Support for
+aarch64 is planned.
+
+Knast runs on GENERIC kernel, but requires several kernel modules to
+be loaded (or compiled in kernel). These are
+
+- ~if_bridge~ is required for setting up VNET networking for jail.
+- ~if_epair~ is required for setting up VNET networking for jail
+- ~linux64~ (optional) is required for linux jails
+- ~pf~ firewall is required for networking, use ~pf~ service to load
+  it.
+
+Following sysctl variables need to be set:
+
+- ~net.inet.ip.forwarding -> 1~ for jail networking.
+
+** Usage
+
+*** Building
+
+#+BEGIN_SRC
+cargo build release
+#+END_SRC
+
+
+*** Creating a bundle
+To run a container OCI runtimes need a [[https://github.com/opencontainers/runtime-spec/blob/1c3f411f041711bbeecf35ff7e93461ea6789220/bundle.md][runtime bundle]]. Runtime bundles
+are built from OCI images. Knast is a mere runtime and not responsible
+for creating these files for you. You can use third party tools to
+create a bundle, or create it manually.
+
+For convenience, we provide a util to fetch and unpack OCI images from
+docker registry. For instance, following command will create a runtime
+bundle from oldoldstable debian:
+
+#+BEGIN_SRC sh
+fetch_image debian:oldoldstable-20201209-slim
+#+END_SRC
+
+~fetch_image~ will create a bundle somewhere in a $HOME directory
+the exact location will be printed.
+
+In this example we fetched the oldoldstable debian, whose binaries
+still rely on older kernel ABI which is likely will be covered by
+Linuxulator.
+
+*** OCI lifecycle
+
+Once the bundle is created, you can create a container.
+
+Following will create a VNET jail, configure network for it, mount all
+necessary devices and so on.
+
+#+BEGIN_SRC sh
+runc create debian /home/akhramov/containers/d19a2ab9-af67-4d04-8aef-9c364686c4fb
+#+END_SRC
+
+Then you will be able to start the container
+
+#+BEGIN_SRC sh
+runc start debian
+#+END_SRC
+
+Finally, you can delete the stopped container
+
+#+BEGIN_SRC sh
+runc delete debian
+#+END_SRC
+
+Apart from that, you can query containers state using ~state~ command
+and send signals to the container using ~kill~. Please note that
+*kill diverges* from the etalone runc realization in sense that it
+only support signal numbers, not names.
+
+** Project structure
+This project consists of several libraries, namely
+
+- netzwerk contains network-related routines. Setting up interfaces,
+  NATs, etc
+- registratur is a client library for docker registry. It's just a
+  convenience library containing types & HTTP client and does not
+  directly serve project goals. This functionality is to be handled by
+  other tools.
+- baustelle builds containers from images. It even supports a limited
+  subsets of dockerfiles, though, just like with registratur this
+  functionality is to be handled by other tools.
+- storage provides storage-agnostic embedded db. Is used by runc to
+  store containers state and other metadata.
+
+** Goals
+
+Knast is a research project conducted (in order of priority) to
+
+- examine capabilities of Rust in niche of OS-level virtualization, in
+  vein of Oracle's [[https://github.com/oracle/railcar][railcar]]. Long term goal is to implement modules for
+  the popular orchestration / containerization solutions, like a [[https://www.redhat.com/sysadmin/cni-kubernetes][CNI
+  plugin]].
+
+- Examine feasibility to implement a container runtime without
+  userspace dependencies: a self-sufficient binary which doesn't rely
+  on presence of any binaries in system.
+
+  That implies that we will need to rewrite bindings to ~mount~,
+  ~devfs~, ~route~, partially implement functionality provided by
+  ~ifconfig~. Again, such a good test for Rust :)
+
+- Build a runtime for containerd, a CRI, etc. Which has lower
+  priority.
+
+** State
+Not ready, please don't use it anywhere.
+
+** Other efforts.
+
+- https://github.com/samuelkarp/runj this project will likely achieve
+  production-readiness sooner and reuses stable, reliable tooling
+  which is already there. Please check it out.
+
+** Contributing
+
+If you would like to contribute -- please do. Check the list of open
+issues and tackle any task you want in regards to project priorities.
+
+Testers, bug reporters, ocasional users -- I love you all.

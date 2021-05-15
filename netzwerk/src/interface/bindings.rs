@@ -13,6 +13,7 @@ const SIOCSIFNAME: u64 = 0x80206928;
 const SIOCIFDESTROY: u64 = 0x80206979;
 const SIOCSDRVSPEC: u64 = 0x8028697b;
 const SIOCSIFVNET: u64 = 0xc020695a;
+const SIOCGIFCAP: u64 = 0xc020691f;
 
 const BRDGADD: u64 = 0x0;
 const BRDGDEL: u64 = 0x1;
@@ -112,6 +113,11 @@ pub fn set_interface_address(
             StdError::last_os_error()
         ))
     };
+}
+
+#[fehler::throws]
+pub fn check_interface_existence(socket: &Socket, request: &ifreq) -> bool {
+    unsafe { ioctl(socket.0, SIOCGIFCAP, request) >= 0 }
 }
 
 // TODO: shall we just inline the common portion?

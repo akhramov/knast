@@ -85,9 +85,9 @@ impl Mountable for Mount {
 fn prepare_devfs(path: impl AsRef<Path>) {
     use devfs::{apply, Operation};
 
-    const DEFAULT_DEVICES: [&str; 9] = [
+    const DEFAULT_DEVICES: [&str; 10] = [
         "null", "zero", "full", "random", "urandom", "tty", "console", "pts",
-        "pts/*",
+        "pts/*", "fd",
     ];
 
     apply(&path, Operation::HideAll)?;
@@ -179,7 +179,8 @@ mod tests {
         assert_eq!(
             entries,
             vec![
-                "random", "urandom", "console", "full", "null", "zero", "pts"
+                "random", "urandom", "console", "full", "null", "zero", "fd",
+                "pts"
             ]
         );
     }

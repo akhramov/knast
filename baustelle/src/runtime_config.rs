@@ -119,7 +119,7 @@ fn generate_annotations() -> BTreeMap<String, String> {
 
     // TODO: something meaningful, or at least adhere to OCI
     // spec :)
-    annotations.insert("io.container.manager".into(), "werft".into());
+    annotations.insert("io.container.manager".into(), "knast".into());
     annotations
         .insert("org.opencontainers.image.stopSignal".into(), "15".into());
 

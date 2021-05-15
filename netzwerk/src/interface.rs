@@ -8,8 +8,9 @@ use libc::{AF_INET, SOCK_DGRAM};
 
 use crate::common_bindings::Socket;
 use bindings::{
-    bridge_addm, bridge_delm, create_interface, destroy_interface, ifreq,
-    jail_interface, rename_interface, set_interface_address,
+    bridge_addm, bridge_delm, check_interface_existence, create_interface,
+    destroy_interface, ifreq, jail_interface, rename_interface,
+    set_interface_address,
 };
 
 /// A structure incapsulating network interface requests
@@ -92,7 +93,7 @@ impl Interface {
     ///
     /// # Examples
     /// Create if_bridge(4) interface and rename it to
-    /// "werft0"
+    /// "knast0"
     ///
     /// ```rust,no_run
     /// use netzwerk::interface::Interface;
@@ -101,7 +102,7 @@ impl Interface {
     ///     .expect("Failed to create iface socket")
     ///     .create()
     ///     .expect("Failed to create interface")
-    ///     .name("werft0")
+    ///     .name("knast0")
     ///     .expect("Failed to rename interface");
     /// ```
     #[fehler::throws]
@@ -160,6 +161,25 @@ impl Interface {
         )?;
 
         self
+    }
+
+    /// Check if given interface exists
+    ///
+    /// # Examples
+    /// Create if_bridge(4) interface and set its address to
+    /// 172.24.0.1/24
+    ///
+    /// ```rust,no_run
+    /// use netzwerk::interface::Interface;
+    ///
+    /// Interface::new("bridge")
+    ///     .expect("Failed to create iface socket")
+    ///     .exists()
+    ///     .expect("Failed to check interface existence")
+    /// ```
+    #[fehler::throws]
+    pub fn exists(&self) -> bool {
+        check_interface_existence(&self.socket, &self.request)?
     }
 
     /// Put interface into the jail
@@ -273,12 +293,44 @@ mod tests {
     }
 
     #[test_helpers::jailed_test]
+    fn test_interface_existence() {
+        let exists = create_interface("bridge", "knast0")
+            .expect("Failed to create interface")
+            .exists()
+            .expect("Failed to check inteface existence");
+
+        assert!(exists);
+    }
+
+    #[test_helpers::jailed_test]
+    fn test_interface_existence_separately() {
+        create_interface("bridge", "knast0").unwrap();
+
+        let exists = Interface::new("knast0")
+            .unwrap()
+            .exists()
+            .expect("Failed to check inteface existence");
+
+        assert!(exists);
+    }
+
+    #[test_helpers::jailed_test]
+    fn test_interface_existence_negative_case() {
+        let exists = Interface::new("knast0")
+            .unwrap()
+            .exists()
+            .expect("Failed to check inteface existence");
+
+        assert!(!exists);
+    }
+
+    #[test_helpers::jailed_test]
     fn test_bridge_creation() {
-        let _iface = create_interface("bridge", "werft0")
+        let _iface = create_interface("bridge", "knast0")
             .expect("Failed to create interface");
 
         let ifconfig_output = Command::new("ifconfig")
-            .arg("werft0")
+            .arg("knast0")
             .arg("inet")
             .output()
             .expect("Failed to execute ifconfig");
@@ -291,56 +343,56 @@ mod tests {
 
     #[test_helpers::jailed_test]
     fn test_bridge_addm() {
-        let bridge = create_interface("bridge", "werft0")
+        let bridge = create_interface("bridge", "knast0")
             .expect("Failed to create interface");
 
-        let _pair = create_interface("epair", "werftpair")
+        let _pair = create_interface("epair", "knastpair")
             .expect("Failed to create interface");
 
-        let _pair2 = create_interface("epair", "werftpair2")
+        let _pair2 = create_interface("epair", "knastpair2")
             .expect("Failed to create interface");
 
         bridge
-            .bridge_addm(&["werftpair", "werftpair2"])
+            .bridge_addm(&["knastpair", "knastpair2"])
             .expect("Failed to addm");
 
         let ifconfig_output = Command::new("ifconfig")
-            .arg("werft0")
+            .arg("knast0")
             .output()
             .expect("failed to execute ifconfig");
 
         let content = String::from_utf8(ifconfig_output.stdout).unwrap();
 
-        assert!(content.contains("member: werftpair"));
-        assert!(content.contains("member: werftpair2"));
+        assert!(content.contains("member: knastpair"));
+        assert!(content.contains("member: knastpair2"));
     }
 
     #[test_helpers::jailed_test]
     fn test_bridge_delm() {
-        let bridge = create_interface("bridge", "werft0")
+        let bridge = create_interface("bridge", "knast0")
             .expect("Failed to create interface");
 
-        let _pair = create_interface("epair", "werftpair")
+        let _pair = create_interface("epair", "knastpair")
             .expect("Failed to create interface");
 
-        let _pair2 = create_interface("epair", "werftpair2")
+        let _pair2 = create_interface("epair", "knastpair2")
             .expect("Failed to create interface");
 
         bridge
-            .bridge_addm(&["werftpair", "werftpair2"])
+            .bridge_addm(&["knastpair", "knastpair2"])
             .expect("Failed to addm");
 
-        bridge.bridge_delm(&["werftpair2"]).expect("Failed to addm");
+        bridge.bridge_delm(&["knastpair2"]).expect("Failed to addm");
 
         let ifconfig_output = Command::new("ifconfig")
-            .arg("werft0")
+            .arg("knast0")
             .output()
             .expect("failed to execute ifconfig");
 
         let content = String::from_utf8(ifconfig_output.stdout).unwrap();
 
-        assert!(content.contains("member: werftpair"));
-        assert!(!content.contains("member: werftpair2"));
+        assert!(content.contains("member: knastpair"));
+        assert!(!content.contains("member: knastpair2"));
     }
 
     #[test_helpers::jailed_test]
@@ -349,23 +401,23 @@ mod tests {
             .arg("bridge")
             .arg("create")
             .arg("name")
-            .arg("werft0")
+            .arg("knast0")
             .output()
             .expect("Failed to execute ifconfig");
 
         let iface =
-            Interface::new("werft0").expect("Failed to init interface");
+            Interface::new("knast0").expect("Failed to init interface");
 
         iface.destroy().expect("Failed to destroy interface");
 
         let ifconfig_output = Command::new("ifconfig")
-            .arg("werft0")
+            .arg("knast0")
             .output()
             .expect("failed to execute ifconfig");
 
         assert_eq!(Vec::<u8>::new(), ifconfig_output.stdout);
         assert_eq!(
-            b"ifconfig: interface werft0 does not exist\n".to_vec(),
+            b"ifconfig: interface knast0 does not exist\n".to_vec(),
             ifconfig_output.stderr
         );
     }
@@ -380,7 +432,7 @@ mod tests {
 
         let running = jail.start().expect("Couldn't start jail");
 
-        let bridge = create_interface("bridge", "werft0").unwrap();
+        let bridge = create_interface("bridge", "knast0").unwrap();
 
         bridge.vnet(running.jid).unwrap();
 
@@ -391,7 +443,7 @@ mod tests {
 
         let content = String::from_utf8(ifconfig_output.stdout).unwrap();
 
-        assert!(content.contains("werft0"));
+        assert!(content.contains("knast0"));
 
         running.stop().expect("Failed to stop the jail!");
     }

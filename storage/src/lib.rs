@@ -1,7 +1,6 @@
 mod sled_engine;
-mod arc_engine;
 
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::path::{Path, PathBuf};
 
 use anyhow::Error;
 use async_trait::async_trait;
@@ -28,8 +27,8 @@ pub trait StorageEngine {
         &self,
         collection: impl AsRef<[u8]>,
         key: impl AsRef<[u8]>,
-        old_value: impl AsRef<[u8]>,
-        new_value: impl AsRef<[u8]>,
+        old_value: Option<impl AsRef<[u8]>>,
+        new_value: Option<impl AsRef<[u8]>>,
     ) -> Result<(), Error>;
 
     fn remove(
@@ -47,7 +46,7 @@ pub trait StorageEngine {
     async fn flush(&self) -> Result<usize, Error>;
 }
 
-pub type SledStorage = Storage<Arc<sled::Db>>;
+pub type SledStorage = Storage<sled::Db>;
 
 pub struct Storage<T: StorageEngine> {
     inner: Box<T>,
@@ -94,11 +93,19 @@ impl<T: StorageEngine> Storage<T> {
         &self,
         store: impl AsRef<[u8]>,
         key: impl AsRef<[u8]>,
-        old_value: S,
-        new_value: S,
-    ) -> S {
-        let serialized_old_value = bincode::serialize(&old_value)?;
-        let serialized_new_value = bincode::serialize(&new_value)?;
+        old_value: Option<S>,
+        new_value: Option<S>,
+    ) -> Option<S> {
+        let serialized_old_value = if let Some(old_value) = &old_value {
+            Some(bincode::serialize(&old_value)?)
+        } else {
+            None
+        };
+        let serialized_new_value = if let Some(new_value) = &new_value {
+            Some(bincode::serialize(&new_value)?)
+        } else {
+            None
+        };
 
         self.inner.compare_and_swap(
             store,
@@ -135,8 +142,6 @@ impl<T: StorageEngine> Storage<T> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
     use super::Storage;
 
     #[test]
@@ -144,7 +149,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<Arc<sled::Db>>::new(dir.path())
+        let cache = Storage::<sled::Db>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
@@ -167,7 +172,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<Arc<sled::Db>>::new(dir.path())
+        let cache = Storage::<sled::Db>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
@@ -181,14 +186,14 @@ mod test {
             .expect("Failed to put a value into the cache");
         // Cas #1: swap the old value with the new one
         cache
-            .compare_and_swap(tree, key, &value, &new_value)
+            .compare_and_swap(tree, key, Some(&value), Some(&new_value))
             .expect("CAS failed unexpectedly");
 
         let stored_value: Vec<u8> = cache.get(tree, key).unwrap().unwrap();
         assert_eq!(stored_value, new_value);
         // Cas #2: swap the old value back
         cache
-            .compare_and_swap(tree, key, &new_value, &value)
+            .compare_and_swap(tree, key, Some(&new_value), Some(&value))
             .expect("CAS failed unexpectedly");
 
         let stored_value: Vec<u8> = cache.get(tree, key).unwrap().unwrap();
@@ -196,7 +201,7 @@ mod test {
 
         // Cas #3: attempt invalid swap
         let err = cache
-            .compare_and_swap(tree, key, &new_value, &value)
+            .compare_and_swap(tree, key, Some(&new_value), Some(&value))
             .unwrap_err();
 
         assert!(err.to_string().contains("Compare and swap conflict"));
@@ -207,7 +212,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<Arc<sled::Db>>::new(dir.path())
+        let cache = Storage::<sled::Db>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();

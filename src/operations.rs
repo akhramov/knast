@@ -1,9 +1,11 @@
 mod command_ext;
+mod network;
+mod utils;
 
 use std::{
     convert::AsRef,
     fs::File,
-    io::{BufReader, Error as IoError, Write},
+    io::{BufReader, Error as IoError},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -12,14 +14,6 @@ use anyhow::{anyhow, Error};
 use baustelle::runtime_config::RuntimeConfig;
 use jail::{param::Value, process::Jailed};
 use jail::{RunningJail, StoppedJail};
-use memmap::MmapMut;
-use nix::{
-    sys::{
-        signal::Signal,
-        wait::{waitpid, WaitStatus},
-    },
-    unistd::{fork, ForkResult},
-};
 use serde::{Deserialize, Serialize};
 use storage::{Storage, StorageEngine};
 
@@ -101,9 +95,18 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
         // Mountpoints validity check.
         for mountpoint in self.mounts()? {
             mountpoint.mount(&rootfs)?;
-            mountpoint.unmount(&rootfs)?;
         }
 
+        let stopped_jail = StoppedJail::new(&rootfs.as_ref())
+            .name(&self.key)
+            .param("vnet", Value::Int(1))
+            .param("allow.raw_sockets", Value::Int(1))
+            .param("enforce_statfs", Value::Int(1));
+
+        tracing::info!("Starting a jail for the process");
+        let jail = stopped_jail.start()?;
+
+        network::setup(self.storage, &self.key, jail)?;
         self.persist_state(self.retrieve_state()?)?;
     }
 
@@ -148,48 +151,34 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
         self.storage.compare_and_swap(
             CONTAINER_STATE_STORAGE_KEY,
             self.key.as_bytes(),
-            state,
-            &mut new_state,
+            Some(state),
+            Some(&mut new_state),
         )?;
 
-        for mountpoint in self.mounts()? {
-            mountpoint.mount(&path)?;
-        }
+        let jail = self.retrieve_jail()?;
+        let result = Command::new(command)
+            .jail(&jail)
+            .args(args)
+            .env_clear()
+            .envs(envs)
+            .current_dir(cwd)
+            .uid(uid)
+            .gid(gid)
+            .spawn();
 
-        let stopped_jail = StoppedJail::new(&path)
-            .name(&self.key)
-            .param("vnet", Value::Int(1))
-            .param("enforce_statfs", Value::Int(1));
-
-        tracing::info!("Starting a jail for the process");
-        let result: Result<_, Error> =
-            stopped_jail.start().map_err(Error::from).and_then(|jail| {
-                let result = Command::new(command)
-                    .jail(&jail)
-                    .args(args)
-                    .env_clear()
-                    .envs(envs)
-                    .current_dir(cwd)
-                    .uid(uid)
-                    .gid(gid)
-                    .spawn()
-                    .map_err(Error::from);
-                jail.defer_cleanup()?;
-
-                Ok((jail, result?))
-            });
+        jail.defer_cleanup()?;
 
         match result {
             Err(error) => {
-                println!("Error occured {}", error);
+                tracing::error!("Error occured {}", error);
                 let mut state = state.clone();
                 state.status = ContainerStatus::Stopped;
                 self.persist_state(&state)?;
                 self.state = Some(state);
-                self.delete()?;
+                self.delete();
                 fehler::throw!(error);
             }
-            Ok((jail, mut handle)) => {
+            Ok(mut handle) => {
                 let mut state = state.clone();
                 state.status = ContainerStatus::Running;
                 state.pid = handle.id() as _;
@@ -204,25 +193,13 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
         }
     }
 
+    // TODO: logs errors, don't return
     /// Frees resources allocated by Runtime for the
     /// container. [OCI lifecycle steps 11-12](https://git.io/JO7NY).
-    #[fehler::throws]
     pub fn delete(self) {
-        let state = self.retrieve_state()?;
-        if state.status != ContainerStatus::Stopped {
-            anyhow::bail!(
-                "Cannot delete {} container. Must be stopped first",
-                state.status.as_ref()
-            );
+        if let Err(err) = self.cleanup() {
+            tracing::error!("Failed to delete container: {}", err);
         }
-
-        let rootfs = self.rootfs()?;
-        for mount in self.mounts()? {
-            mount.unmount(&rootfs)?;
-        }
-
-        self.storage
-            .remove(CONTAINER_STATE_STORAGE_KEY, self.key.as_bytes())?;
     }
 
     /// Sends a signal to the process
@@ -235,59 +212,23 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
         }
 
         let jail = self.retrieve_jail()?;
-        let mut mmap = MmapMut::map_anon(1024).map_err(|err| {
-            tracing::error!("failed to create mmap {}", err);
-            anyhow!("failed to create mmap {}", err)
-        })?;
 
-        match unsafe { fork() } {
-            Ok(ForkResult::Child) => {
-                let result =
-                    jail.attach().map_err(Error::from).and_then(|_| unsafe {
-                        if libc::kill(state.pid, signal) < 0 {
-                            anyhow::bail!(
-                                "kill failed: {:?}",
-                                IoError::last_os_error()
-                            )
-                        }
-
-                        Ok(())
-                    });
-
-                if let Err(err) = result {
-                    err.downcast_ref::<String>()
-                        .and_then(|string| {
-                            (&mut mmap[..]).write_all(string.as_bytes()).ok()
-                        })
-                        .unwrap_or(());
-                    std::process::abort();
-                };
-
-                std::process::exit(0);
-            }
-            Ok(ForkResult::Parent { child }) => {
-                let status = waitpid(child, None)?;
-
-                match status {
-                    WaitStatus::Exited(_, 0) => (),
-                    WaitStatus::Signaled(_, Signal::SIGABRT, _) => {
-                        let error =
-                            String::from_utf8_lossy(&mmap).into_owned();
-                        anyhow::bail!(error);
-                    }
-                    status => {
-                        anyhow::bail!("(kill) unexpected status {:?}", status);
-                    }
+        utils::run_in_fork(|| {
+            jail.attach().map_err(Error::from).and_then(|_| unsafe {
+                if libc::kill(state.pid, signal) < 0 {
+                    anyhow::bail!(
+                        "kill failed: {:?}",
+                        IoError::last_os_error()
+                    )
                 }
-            }
-            Err(err) => {
-                anyhow::bail!(err)
-            }
-        };
+
+                Ok(())
+            })
+        })?
     }
 
     #[fehler::throws]
-    pub fn state(self) -> serde_json::Value {
+    pub fn state(&self) -> serde_json::Value {
         let state = self.retrieve_state()?;
         let jail = self.retrieve_jail();
 
@@ -350,6 +291,27 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     fn retrieve_jail(&'a self) -> RunningJail {
         RunningJail::from_name(&self.key)
             .map_err(|_| anyhow!("Container is not running"))?
+    }
+
+    #[fehler::throws]
+    fn cleanup(self) {
+        let status = &self.state()?["status"];
+        if status != "stopped" && status != "created" {
+            anyhow::bail!(
+                "Cannot delete {} container. Must be stopped first",
+                status
+            );
+        }
+
+        self.storage
+            .remove(CONTAINER_STATE_STORAGE_KEY, self.key.as_bytes())?;
+
+        let rootfs = self.rootfs()?;
+        for mount in self.mounts()? {
+            mount.unmount(&rootfs)?;
+        }
+
+        network::teardown(self.storage, self.key)?;
     }
 }
 
@@ -503,6 +465,7 @@ mod tests {
         let tmpdir = tempfile::tempdir().unwrap();
         let storage = SledStorage::new(tmpdir.path()).unwrap();
         let bundle = test_helpers::fixture_path!("container");
+        println!("shit {} {}", bundle.display(), tmpdir.path().display());
         Command::new("cp")
             .arg("-r")
             .arg(bundle)
