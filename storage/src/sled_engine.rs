@@ -42,15 +42,24 @@ impl StorageEngine for sled::Db {
         &self,
         collection: impl AsRef<[u8]>,
         key: impl AsRef<[u8]>,
-        old_value: impl AsRef<[u8]>,
-        new_value: impl AsRef<[u8]>,
+        old_value: Option<impl AsRef<[u8]>>,
+        new_value: Option<impl AsRef<[u8]>>,
     ) {
         let tree = self.open_tree(collection)?;
-
+        let old_value = if let Some(old_value) = &old_value {
+            Some(old_value.as_ref())
+        } else {
+            None
+        };
+        let new_value = if let Some(new_value) = &new_value {
+            Some(new_value.as_ref())
+        } else {
+            None
+        };
         tree.compare_and_swap(
             key.as_ref(),
-            Some(old_value.as_ref()),
-            Some(new_value.as_ref()),
+            old_value,
+            new_value,
         )??;
     }
 

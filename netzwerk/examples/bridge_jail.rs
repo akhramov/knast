@@ -14,21 +14,19 @@ use netzwerk::interface::Interface;
 use netzwerk::route;
 use nix::unistd::{fork, ForkResult};
 
-const JAIL_NUMBER: i32 = 5;
-
 extern "C" {
     fn jail_attach(jid: i32) -> i32;
 }
 
-fn create_interfaces() -> Result<String> {
+fn create_interfaces(jail_number: i32) -> Result<String> {
     let bridge = Interface::new("bridge")
         .expect("Failed to create iface socket")
         .create()?
-        .name("werft0")?
-        .address("172.24.0.1", "172.24.0.255", "255.255.255.0")?;
+        .name("knast0")?;
 
     let pair_a = Interface::new("epair")?
-        .create()?;
+        .create()?
+        .address("172.24.0.1", "172.24.0.255", "255.255.255.0")?;
 
     let name = pair_a.get_name()?;
     let len = name.len();
@@ -38,7 +36,7 @@ fn create_interfaces() -> Result<String> {
         .expect("Failed to create iface socket");
 
     pair_b
-        .vnet(JAIL_NUMBER) /* Transfer interface to the jail #5 */
+        .vnet(jail_number) /* Transfer interface to the jail */
         .expect("Failed to move interface to the jail");
 
     bridge.bridge_addm(&[name])?;
@@ -46,15 +44,17 @@ fn create_interfaces() -> Result<String> {
     Ok(String::from(name_b))
 }
 
-
 fn main() {
-    let name = create_interfaces()
+    let jid = std::env::args().nth(1).expect("USAGE: bridge_jail JID")
+        .parse().expect("Failed to parse jail id");
+
+    let name = create_interfaces(jid)
         .expect("Failed to create interfaces");
 
     match unsafe { fork() } {
         Ok(ForkResult::Child) => {
-            if unsafe { jail_attach(JAIL_NUMBER) } < 0 {
-                panic!("Failed to attach to jail {}", JAIL_NUMBER);
+            if unsafe { jail_attach(jid) } < 0 {
+                panic!("Failed to attach to jail {}", jid);
             };
 
             let pair_b = Interface::new(&name)

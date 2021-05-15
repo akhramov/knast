@@ -2,34 +2,46 @@ use std::process::exit;
 
 use clap::{load_yaml, App, ArgMatches};
 use knast::operations::OciOperations;
-use storage::SledStorage;
+use storage::{SledStorage, StorageEngine};
 
 fn main() {
     let yaml = load_yaml!("runc.yaml");
     let matches = App::from(yaml).get_matches();
+    let home = std::env::var("HOME").unwrap();
+    let storage = SledStorage::new(home).unwrap();
+    let container_id =
+        |matches: &ArgMatches| matches.value_of("ID").unwrap().to_owned();
 
     if let Some(matches) = matches.subcommand_matches("state") {
-        return state(matches);
+        let ops = OciOperations::new(&storage, container_id(matches)).unwrap();
+
+        return state(ops);
     }
     if let Some(matches) = matches.subcommand_matches("create") {
-        return create(matches);
+        let ops = OciOperations::new(&storage, container_id(matches)).unwrap();
+        let bundle = matches.value_of("BUNDLE").unwrap();
+
+        return create(ops, bundle);
     }
     if let Some(matches) = matches.subcommand_matches("start") {
-        return start(matches);
+        let ops = OciOperations::new(&storage, container_id(matches)).unwrap();
+
+        return start(ops);
     }
     if let Some(matches) = matches.subcommand_matches("kill") {
-        return kill(matches);
+        let ops = OciOperations::new(&storage, container_id(matches)).unwrap();
+        let signal = matches.value_of("SIGNAL").unwrap().parse().unwrap();
+
+        return kill(ops, signal);
     }
     if let Some(matches) = matches.subcommand_matches("delete") {
-        return delete(matches);
+        let ops = OciOperations::new(&storage, container_id(matches)).unwrap();
+
+        return delete(ops);
     }
 }
 
-fn state(args: &ArgMatches) {
-    let container_id = args.value_of("ID").unwrap();
-    let storage = SledStorage::new("~/").unwrap();
-    let ops = OciOperations::new(&storage, container_id).unwrap();
-
+fn state(ops: OciOperations<impl StorageEngine>) {
     match ops.state() {
         Ok(result) => println!("{}", result),
         Err(error) => {
@@ -39,14 +51,9 @@ fn state(args: &ArgMatches) {
     }
 }
 
-fn create(args: &ArgMatches) {
-    let container_id = args.value_of("ID").unwrap();
-    let bundle = args.value_of("BUNDLE").unwrap();
-    let storage = SledStorage::new("~/").unwrap();
-    let ops = OciOperations::new(&storage, container_id).unwrap();
-
+fn create(ops: OciOperations<impl StorageEngine>, bundle: &str) {
     match ops.create(bundle) {
-        Ok(_) => println!("Created container {}", container_id),
+        Ok(_) => (),
         Err(error) => {
             println!("{}", error);
             exit(1);
@@ -54,13 +61,9 @@ fn create(args: &ArgMatches) {
     }
 }
 
-fn start(args: &ArgMatches) {
-    let container_id = args.value_of("ID").unwrap();
-    let storage = SledStorage::new("~/").unwrap();
-    let ops = OciOperations::new(&storage, container_id).unwrap();
-
+fn start(ops: OciOperations<impl StorageEngine>) {
     match ops.start() {
-        Ok(_) => println!("Started container {}", container_id),
+        Ok(_) => (),
         Err(error) => {
             println!("{}", error);
             exit(1);
@@ -68,12 +71,7 @@ fn start(args: &ArgMatches) {
     }
 }
 
-fn kill(args: &ArgMatches) {
-    let container_id = args.value_of("ID").unwrap();
-    let signal = args.value_of("SIGNAL").unwrap().parse().unwrap();
-    let storage = SledStorage::new("~/").unwrap();
-    let ops = OciOperations::new(&storage, container_id).unwrap();
-
+fn kill(ops: OciOperations<impl StorageEngine>, signal: i32) {
     match ops.kill(signal) {
         Ok(_) => (),
         Err(error) => {
@@ -83,16 +81,6 @@ fn kill(args: &ArgMatches) {
     }
 }
 
-fn delete(args: &ArgMatches) {
-    let container_id = args.value_of("ID").unwrap();
-    let storage = SledStorage::new("~/").unwrap();
-    let ops = OciOperations::new(&storage, container_id).unwrap();
-
-    match ops.delete() {
-        Ok(_) => (),
-        Err(error) => {
-            println!("{}", error);
-            exit(1);
-        }
-    }
+fn delete(ops: OciOperations<impl StorageEngine>) {
+    ops.delete();
 }
