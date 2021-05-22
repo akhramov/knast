@@ -188,36 +188,49 @@ fn generate_mounts(os: String) -> Vec<Mount> {
 
     match &os[..] {
         "linux" => {
-            mounts.extend(vec![
-                Mount {
-                    destination: "/sys".into(),
-                    r#type: "linsysfs".into(),
-                    source: Some("linsysfs".into()),
-                    options: Some(vec![
-                        "nosuid".into(),
-                        "noexec".into(),
-                        "ro".into(),
-                    ]),
-                },
-                Mount {
-                    destination: "/proc".into(),
-                    r#type: "linprocfs".into(),
-                    source: Some("linprocfs".into()),
-                    options: Some(vec![
-                        "nosuid".into(),
-                        "noexec".into(),
-                        "ro".into(),
-                    ]),
-                },
-            ].into_iter());
+            mounts.extend(
+                vec![
+                    Mount {
+                        destination: "/sys".into(),
+                        r#type: "linsysfs".into(),
+                        source: Some("linsysfs".into()),
+                        options: Some(vec![
+                            "nosuid".into(),
+                            "noexec".into(),
+                            "ro".into(),
+                        ]),
+                    },
+                    Mount {
+                        destination: "/proc".into(),
+                        r#type: "linprocfs".into(),
+                        source: Some("linprocfs".into()),
+                        options: Some(vec![
+                            "nosuid".into(),
+                            "noexec".into(),
+                            "ro".into(),
+                        ]),
+                    },
+                    Mount {
+                        destination: "/dev/fd".into(),
+                        r#type: "fdescfs".into(),
+                        source: Some("fdescfs".into()),
+                        options: Some(vec!["linrdlnk".into()]),
+                    },
+                ]
+                .into_iter(),
+            );
         }
-        "freebsd" => (),
+        "freebsd" => mounts.extend(vec![Mount {
+            destination: "/dev/fd".into(),
+            r#type: "fdescfs".into(),
+            source: Some("fdescfs4".into()),
+            options: None,
+        }]),
         os => panic!("Unsupported OS {:?}", os),
     }
 
     mounts
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -74,7 +74,11 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     /// Locks the configuration by creating a copy of
     /// configuration in the storage.
     #[fehler::throws]
-    pub fn create(mut self, path: impl AsRef<Path>) {
+    pub fn create(
+        mut self,
+        path: impl AsRef<Path>,
+        nat_interface: Option<impl AsRef<str>>,
+    ) {
         if self.state.is_some() {
             anyhow::bail!("Container '{}' already exists!", self.key);
         }
@@ -106,7 +110,7 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
         tracing::info!("Starting a jail for the process");
         let jail = stopped_jail.start()?;
 
-        network::setup(self.storage, &self.key, jail)?;
+        network::setup(self.storage, &self.key, jail, nat_interface)?;
         self.persist_state(self.retrieve_state()?)?;
     }
 
@@ -165,8 +169,6 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
             .uid(uid)
             .gid(gid)
             .spawn();
-
-        jail.defer_cleanup()?;
 
         match result {
             Err(error) => {
@@ -295,6 +297,8 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
 
     #[fehler::throws]
     fn cleanup(self) {
+        self.retrieve_jail()?.defer_cleanup()?;
+
         let status = &self.state()?["status"];
         if status != "stopped" && status != "created" {
             anyhow::bail!(
@@ -411,7 +415,7 @@ mod tests {
     fn create_container(storage: Arc<SledStorage>, name: &str, path: &Path) {
         OciOperations::new(&storage.clone(), name)
             .expect("failed to init OCI lifecycle struct")
-            .create(path.join("container"))
+            .create(path.join("container"), None)
             .expect("failed to create container");
     }
 

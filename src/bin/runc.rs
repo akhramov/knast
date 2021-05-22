@@ -20,8 +20,9 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("create") {
         let ops = OciOperations::new(&storage, container_id(matches)).unwrap();
         let bundle = matches.value_of("BUNDLE").unwrap();
+        let interface = matches.value_of("nat-interface").unwrap();
 
-        return create(ops, bundle);
+        return create(ops, bundle, interface);
     }
     if let Some(matches) = matches.subcommand_matches("start") {
         let ops = OciOperations::new(&storage, container_id(matches)).unwrap();
@@ -51,8 +52,12 @@ fn state(ops: OciOperations<impl StorageEngine>) {
     }
 }
 
-fn create(ops: OciOperations<impl StorageEngine>, bundle: &str) {
-    match ops.create(bundle) {
+fn create(
+    ops: OciOperations<impl StorageEngine>,
+    bundle: &str,
+    nat_interface: &str,
+) {
+    match ops.create(bundle, Some(nat_interface)) {
         Ok(_) => (),
         Err(error) => {
             println!("{}", error);

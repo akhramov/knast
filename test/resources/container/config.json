@@ -30,6 +30,14 @@
         "ro"
       ],
       "type": "linprocfs"
+    },
+    {
+      "destination": "/dev/fd",
+      "source": "fdescfs",
+      "options": [
+        "linrdlnk"
+      ],
+      "type": "fdescfs"
     }
   ],
   "process": {
