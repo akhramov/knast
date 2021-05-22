@@ -9,6 +9,8 @@ use netzwerk::{
     interface::Interface,
     range::{broadcast, mask, range as ip_range},
     route,
+    pf::Pf,
+    nat::Nat,
 };
 use storage::{Storage, StorageEngine};
 
@@ -24,12 +26,18 @@ pub fn setup(
     storage: &Storage<impl StorageEngine>,
     key: impl AsRef<str>,
     jail: RunningJail,
+    nat_interface: Option<impl AsRef<str>>,
 ) {
     let bridge = setup_bridge(storage)?;
     let host = setup_pair(storage, key, jail)?;
     let host_name = host.get_name()?;
 
     bridge.bridge_addm(&[host_name])?;
+
+    if let Some(nat_interface) = nat_interface {
+        let nat = Pf::new(nat_interface.as_ref())?;
+        nat.add(DEFAULT_NETWORK)?;
+    }
 }
 
 #[fehler::throws]

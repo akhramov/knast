@@ -17,8 +17,9 @@ pub fn mount<'a>(
         .flat_map(|option| {
             let mut split = option.as_ref().split("=");
             let key = [split.next().unwrap_or("").as_bytes(), b"\0"].concat();
-            let value =
-                [split.next().unwrap_or("").as_bytes(), b"\0"].concat();
+            let value = split.next().map(|item| {
+                [item.as_bytes(), b"\0"].concat()
+            }).unwrap_or(vec![]);
 
             vec![key, value]
         })

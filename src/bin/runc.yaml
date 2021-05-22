@@ -22,6 +22,10 @@ subcommands:
             - BUNDLE:
                 about: OCI runtime bundle
                 required: true
+            - nat-interface:
+                short: n
+                default_value: lagg0
+                help: interface for NAT
     - start:
         about: Start container ID
         version: "0.0.1"
