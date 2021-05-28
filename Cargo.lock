@@ -121,6 +121,7 @@ dependencies = [
  "anyhow",
  "csv",
  "dockerfile-parser",
+ "env_logger",
  "fehler 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.8",
  "itertools",
@@ -132,6 +133,9 @@ dependencies = [
  "serde",
  "serde_json",
  "storage",
+ "tempfile",
+ "test_helpers",
+ "tokio",
  "uuid",
 ]
 
@@ -1063,32 +1067,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "knast"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "baustelle",
- "clap 3.0.0-beta.2",
- "common_lib",
- "fehler 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "gag",
- "jail",
- "libc",
- "memmap",
- "netzwerk",
- "nix 0.20.0",
- "serde",
- "serde_json",
- "storage",
- "strum_macros",
- "tempfile",
- "test_helpers",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1118,6 +1096,29 @@ name = "libc"
 version = "0.2.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18794a8ad5b29321f790b55d93dfba91e125cb1a9edbd4f8e3150acc771c1a5e"
+
+[[package]]
+name = "libknast"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "baustelle",
+ "common_lib",
+ "fehler 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gag",
+ "jail",
+ "libc",
+ "memmap",
+ "netzwerk",
+ "nix 0.20.0",
+ "serde",
+ "serde_json",
+ "storage",
+ "strum_macros",
+ "tempfile",
+ "test_helpers",
+ "tracing",
+]
 
 [[package]]
 name = "libloading"
@@ -1282,7 +1283,10 @@ dependencies = [
  "common_lib",
  "fehler 1.0.0 (git+https://github.com/withoutboats/fehler)",
  "ipnetwork",
+ "jail",
  "libc",
+ "nix 0.20.0",
+ "test_helpers",
 ]
 
 [[package]]
@@ -1769,6 +1773,8 @@ dependencies = [
  "ring",
  "serde",
  "serde_json",
+ "test_helpers",
+ "tokio",
  "url",
 ]
 
@@ -1829,6 +1835,19 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "runc"
+version = "0.1.0"
+dependencies = [
+ "baustelle",
+ "clap 3.0.0-beta.2",
+ "libknast",
+ "storage",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2072,6 +2091,7 @@ dependencies = [
  "fehler 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "sled",
+ "tempfile",
 ]
 
 [[package]]

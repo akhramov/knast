@@ -1,0 +1,26 @@
+[package]
+name = "libknast"
+version = "0.1.0"
+authors = ["Artem Khramov <akhramov@pm.me>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1"
+baustelle = { path = "../baustelle" }
+common_lib = { path = "../common_lib" }
+fehler = "1"
+jail = { git = "https://github.com/fubarnetes/libjail-rs", branch = "dev" }
+libc = "0.2.71"
+memmap = "0.7"
+netzwerk = { path = "../netzwerk" }
+nix = "0.20.0"
+serde = "1"
+serde_json = "1"
+storage = { path = "../storage" }
+strum_macros = "0.20.1"
+tracing = "0.1.25"
+
+[dev-dependencies]
+gag = "0.1.10"
+test_helpers = { path = "../test_helpers" }
+tempfile = "3.1.0"

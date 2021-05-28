@@ -311,7 +311,7 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
             .remove(CONTAINER_STATE_STORAGE_KEY, self.key.as_bytes())?;
 
         let rootfs = self.rootfs()?;
-        for mount in self.mounts()? {
+        for mount in self.mounts()?.iter().rev() {
             mount.unmount(&rootfs)?;
         }
 
@@ -415,7 +415,7 @@ mod tests {
     fn create_container(storage: Arc<SledStorage>, name: &str, path: &Path) {
         OciOperations::new(&storage.clone(), name)
             .expect("failed to init OCI lifecycle struct")
-            .create(path.join("container"), None)
+            .create(path.join("container"), Some("lo0"))
             .expect("failed to create container");
     }
 
@@ -443,8 +443,7 @@ mod tests {
             .bundle;
         OciOperations::new(&storage.clone(), name)
             .expect("failed to init OCI lifecycle struct")
-            .delete()
-            .expect("failed to delete container");
+            .delete();
 
         let mount_output = Command::new("/sbin/mount")
             .output()
@@ -469,7 +468,6 @@ mod tests {
         let tmpdir = tempfile::tempdir().unwrap();
         let storage = SledStorage::new(tmpdir.path()).unwrap();
         let bundle = test_helpers::fixture_path!("container");
-        println!("shit {} {}", bundle.display(), tmpdir.path().display());
         Command::new("cp")
             .arg("-r")
             .arg(bundle)

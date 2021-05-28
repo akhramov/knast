@@ -3,7 +3,7 @@
 Knast is FreeBSD experimental toolkit for building a modern
 container infrastructure.
 This is a research project project not intended to be used in
-production. See [[Goals]].
+production. See [[#Goals][Goals]].
 
 
 ** Status
@@ -65,6 +65,8 @@ Linuxulator.
 
 Once the bundle is created, you can create a container.
 
+Navigate to ~runc~ folder and build the project using ~cargo build~.
+
 Following will create a VNET jail, configure network for it, mount all
 necessary devices and so on.
 
@@ -103,6 +105,7 @@ This project consists of several libraries, namely
   functionality is to be handled by other tools.
 - storage provides storage-agnostic embedded db. Is used by runc to
   store containers state and other metadata.
+- runc provides an OCI compatible runc binary.
 
 ** Goals
 
