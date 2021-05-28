@@ -1,7 +1,7 @@
 use std::process::exit;
 
 use clap::{load_yaml, App, ArgMatches};
-use knast::operations::OciOperations;
+use libknast::operations::OciOperations;
 use storage::{SledStorage, StorageEngine};
 
 fn main() {

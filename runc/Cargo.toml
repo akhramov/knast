@@ -1,0 +1,14 @@
+[package]
+name = "runc"
+version = "0.1.0"
+authors = ["Artem Khramov <akhramov@pm.me>"]
+edition = "2018"
+
+[dependencies]
+baustelle = { path = "../baustelle" }
+clap = { version = "3.0.0-beta.2", features = ["yaml"] }
+libknast = { path = "../libknast" }
+storage = { path = "../storage" }
+tokio = { version = "1.1.1", features = ["macros", "rt", "rt-multi-thread"] }
+tracing = "0.1.25"
+tracing-subscriber = "0.2.18"
