@@ -24,16 +24,18 @@ fn create_interfaces(jail_number: i32) -> Result<String> {
         .create()?
         .name("knast0")?;
 
-    let pair_a = Interface::new("epair")?
-        .create()?
-        .address("172.24.0.1", "172.24.0.255", "255.255.255.0")?;
+    let pair_a = Interface::new("epair")?.create()?.address(
+        "172.24.0.1",
+        "172.24.0.255",
+        "255.255.255.0",
+    )?;
 
     let name = pair_a.get_name()?;
     let len = name.len();
     let name_b = &[&name[..len - 1], "b"].join("");
 
-    let pair_b = Interface::new(name_b)
-        .expect("Failed to create iface socket");
+    let pair_b =
+        Interface::new(name_b).expect("Failed to create iface socket");
 
     pair_b
         .vnet(jail_number) /* Transfer interface to the jail */
@@ -45,11 +47,13 @@ fn create_interfaces(jail_number: i32) -> Result<String> {
 }
 
 fn main() {
-    let jid = std::env::args().nth(1).expect("USAGE: bridge_jail JID")
-        .parse().expect("Failed to parse jail id");
+    let jid = std::env::args()
+        .nth(1)
+        .expect("USAGE: bridge_jail JID")
+        .parse()
+        .expect("Failed to parse jail id");
 
-    let name = create_interfaces(jid)
-        .expect("Failed to create interfaces");
+    let name = create_interfaces(jid).expect("Failed to create interfaces");
 
     match unsafe { fork() } {
         Ok(ForkResult::Child) => {
@@ -57,15 +61,14 @@ fn main() {
                 panic!("Failed to attach to jail {}", jid);
             };
 
-            let pair_b = Interface::new(&name)
-                .expect("Failed to create iface socket");
+            let pair_b =
+                Interface::new(&name).expect("Failed to create iface socket");
 
             pair_b
                 .address("172.24.0.2", "172.24.0.255", "255.255.255.0")
                 .unwrap();
             route::add_default("172.24.0.1").unwrap();
-        },
+        }
         _ => (),
-
     }
 }

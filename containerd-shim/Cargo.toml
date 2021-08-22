@@ -1,0 +1,27 @@
+[package]
+name = "containerd-shim"
+version = "0.1.0"
+authors = ["Artem Khramov <akhramov@pm.me>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1.42"
+futures = "0.3"
+libknast = { path = "../libknast" }
+libc = "0.2.71"
+nix = "0.20.0"
+protobuf = "2.8.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+storage = { path = "../storage" }
+ttrpc = { git = "ssh://git@github.com/akhramov/ttrpc-rust", features = ["async"] }
+tokio = { version = "1.1.1", features = ["macros", "rt", "rt-multi-thread"] }
+tracing = { version = "0.1.25", features = ["attributes"] }
+tracing-appender = "0.1.2"
+tracing-core = "0.1.19"
+tracing-subscriber = "0.2.18"
+url = "2.2.2"
+
+[build-dependencies]
+ttrpc-codegen = { git = "ssh://git@github.com/akhramov/ttrpc-rust" }

@@ -19,3 +19,9 @@ impl AsSignedBytes for Vec<u8> {
         self.as_slice()
     }
 }
+
+impl AsSignedBytes for &[u8] {
+    fn bytes(&self) -> &[u8] {
+        self
+    }
+}

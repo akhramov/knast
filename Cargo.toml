@@ -8,4 +8,5 @@ members = [
   "storage",
   "test_helpers",
   "runc",
+  "containerd-shim",
 ]

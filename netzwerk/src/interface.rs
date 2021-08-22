@@ -1,15 +1,15 @@
-mod bindings;
+mod operations;
 
-use std::ffi::CStr;
-use std::mem;
+use std::{ffi::CStr, mem};
 
 use anyhow::Error;
+use common_lib::AsSignedBytes;
 use libc::{AF_INET, SOCK_DGRAM};
 
-use crate::common_bindings::Socket;
-use bindings::{
+use crate::{bindings::ifreq, common_bindings::Socket};
+use operations::{
     bridge_addm, bridge_delm, check_interface_existence, create_interface,
-    destroy_interface, ifreq, jail_interface, rename_interface,
+    destroy_interface, jail_interface, rename_interface,
     set_interface_address,
 };
 
@@ -59,7 +59,8 @@ impl Interface {
         let socket = Socket::new(AF_INET, SOCK_DGRAM)?;
         let mut request: ifreq = unsafe { mem::zeroed() };
 
-        request.ifr_name[0..iface.len()].copy_from_slice(iface.as_bytes());
+        request.ifr_name[0..iface.len()]
+            .copy_from_slice(iface.as_signed_bytes());
 
         Self { request, socket }
     }

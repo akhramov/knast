@@ -8,6 +8,7 @@ edition = "2018"
 baustelle = { path = "../baustelle" }
 clap = { version = "3.0.0-beta.2", features = ["yaml"] }
 libknast = { path = "../libknast" }
+serde_json = "1"
 storage = { path = "../storage" }
 tokio = { version = "1.1.1", features = ["macros", "rt", "rt-multi-thread"] }
 tracing = "0.1.25"

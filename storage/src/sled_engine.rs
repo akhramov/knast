@@ -1,13 +1,11 @@
-use std::path::Path;
+use std::{future::Future, path::Path};
 
 use anyhow::Error;
-use async_trait::async_trait;
 
 use super::StorageEngine;
 
 const STORAGE_FILE: &str = "storage.db";
 
-#[async_trait]
 impl StorageEngine for sled::Db {
     #[fehler::throws]
     fn initialize(cache_dir: impl AsRef<Path>) -> Box<Self> {
@@ -56,11 +54,7 @@ impl StorageEngine for sled::Db {
         } else {
             None
         };
-        tree.compare_and_swap(
-            key.as_ref(),
-            old_value,
-            new_value,
-        )??;
+        tree.compare_and_swap(key.as_ref(), old_value, new_value)??;
     }
 
     #[fehler::throws]
@@ -81,7 +75,7 @@ impl StorageEngine for sled::Db {
         tree.contains_key(key)?
     }
 
-    async fn flush(&self) -> Result<usize, Error> {
-        self.flush_async().await.map_err(Error::from)
+    fn flush(&self) -> Box<dyn Future<Output = Result<usize, Error>> + Unpin> {
+        self.flush_async()
     }
 }

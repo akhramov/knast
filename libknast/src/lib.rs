@@ -1,2 +1,2 @@
-mod filesystem;
+pub mod filesystem;
 pub mod operations;

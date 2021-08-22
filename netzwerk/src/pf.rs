@@ -1,11 +1,3 @@
-#[allow(
-    non_camel_case_types,
-    non_snake_case,
-    dead_code,
-    non_upper_case_globals
-)]
-mod bindings;
-
 use std::{
     fs::{File, OpenOptions},
     io::Error as StdError,
@@ -14,12 +6,12 @@ use std::{
     os::unix::io::AsRawFd,
 };
 
-use anyhow::{anyhow, Error};
-use bindings::{
+use crate::bindings::{
     pfioc_pooladdr, pfioc_rule, pfioc_table, pfioc_trans,
     pfioc_trans_pfioc_trans_e, pfr_addr, pfr_table, PFI_AFLAG_NOALIAS,
     PFR_TFLAG_PERSIST, PF_ADDR_DYNIFTL, PF_NAT, PF_RULESET_NAT,
 };
+use anyhow::{anyhow, Error};
 use common_lib::AsSignedBytes;
 use ipnetwork::Ipv4Network;
 use libc::{ioctl, AF_INET};

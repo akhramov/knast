@@ -13,14 +13,12 @@ pub fn range(range: impl AsRef<str>) -> BinaryHeap<Ipv4Addr> {
 
 #[fehler::throws]
 pub fn broadcast(range: impl AsRef<str>) -> Ipv4Addr {
-    Ipv4Network::try_from(range.as_ref())?
-        .broadcast()
+    Ipv4Network::try_from(range.as_ref())?.broadcast()
 }
 
 #[fehler::throws]
 pub fn mask(range: impl AsRef<str>) -> Ipv4Addr {
-    Ipv4Network::try_from(range.as_ref())?
-        .mask()
+    Ipv4Network::try_from(range.as_ref())?.mask()
 }
 
 #[cfg(test)]

@@ -1,0 +1,3 @@
+[net]
+# asks cargo to use git from path (assuming it has credentials setup)
+git-fetch-with-cli = true
