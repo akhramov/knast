@@ -6,11 +6,18 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-async-trait = "0.1.42"
 bincode = "1.2.1"
 fehler = "1.0"
+r2d2 = "0.8.9"
+r2d2_sqlite="0.18.0"
+rusqlite = { version = "0.25.3", optional = true }
 serde = "1.0"
-sled = "0.34"
+sled = { version = "0.34", optional = true }
 
 [dev-dependencies]
 tempfile = "3.1.0"
+
+[features]
+default = ["sqlite_engine"]
+sled_engine = ["sled"]
+sqlite_engine = ["rusqlite"]

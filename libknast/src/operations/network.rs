@@ -7,10 +7,10 @@ use anyhow::Error;
 use jail::RunningJail;
 use netzwerk::{
     interface::Interface,
+    nat::Nat,
+    pf::Pf,
     range::{broadcast, mask, range as ip_range},
     route,
-    pf::Pf,
-    nat::Nat,
 };
 use storage::{Storage, StorageEngine};
 
@@ -41,10 +41,7 @@ pub fn setup(
 }
 
 #[fehler::throws]
-pub fn teardown(
-    storage: &Storage<impl StorageEngine>,
-    key: impl AsRef<str>,
-) {
+pub fn teardown(storage: &Storage<impl StorageEngine>, key: impl AsRef<str>) {
     let cache: ContainerAddressStorage = storage
         .get(NETWORK_STATE_STORAGE_KEY, CONTAINER_ADDRESS_STORAGE_KEY)?
         .ok_or_else(|| anyhow::anyhow!("Failed to read network state data"))?;
@@ -110,6 +107,7 @@ fn setup_bridge(storage: &Storage<impl StorageEngine>) -> Interface {
 }
 
 #[fehler::throws]
+#[tracing::instrument(err)]
 fn get_address(storage: &Storage<impl StorageEngine>) -> Ipv4Addr {
     let maybe_heap: Option<BinaryHeap<Ipv4Addr>> =
         storage.get(NETWORK_STATE_STORAGE_KEY, DEFAULT_NETWORK.as_bytes())?;
@@ -220,7 +218,7 @@ fn reserve_addresses(
 #[fehler::throws]
 fn release_addresses(
     storage: &Storage<impl StorageEngine>,
-    key: impl AsRef<str>
+    key: impl AsRef<str>,
 ) {
     let maybe_cache: Option<ContainerAddressStorage> = storage
         .get(NETWORK_STATE_STORAGE_KEY, CONTAINER_ADDRESS_STORAGE_KEY)?;

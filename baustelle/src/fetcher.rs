@@ -276,10 +276,7 @@ mod test {
 
     use registratur::v2::{client::Client, domain::manifest::Manifest};
 
-    fn get_manifest_from_storage(
-        storage: &Storage,
-        key: &str,
-    ) -> Manifest {
+    fn get_manifest_from_storage(storage: &Storage, key: &str) -> Manifest {
         let image_digest: String =
             storage.get(IMAGES_INDEX_STORAGE_KEY, key).unwrap().unwrap();
 

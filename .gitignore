@@ -1,3 +1,5 @@
 */target
 target
 *~
+netzwerk/src/pf/bindings.rs
+containerd-shim/src/protocols

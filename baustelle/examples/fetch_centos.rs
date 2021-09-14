@@ -7,7 +7,7 @@ extern crate registratur;
 extern crate tokio;
 
 use baustelle::{Builder, EvaluationUpdate, LayerDownloadStatus};
-use storage::SledStorage;
+use storage::TestStorage;
 
 const CONTAINERFILE: &[u8] = r#"
 FROM centos:latest
@@ -16,7 +16,8 @@ ENV FOO=/bar
 WORKDIR ${FOO}
 
 CMD /bin/sleep 42
-"#.as_bytes();
+"#
+.as_bytes();
 
 #[tokio::main]
 async fn main() {
@@ -24,7 +25,7 @@ async fn main() {
 
     info!("Fetching a centos image");
     let current_dir = std::env::current_dir().unwrap();
-    let storage = SledStorage::new(current_dir).unwrap();
+    let storage = TestStorage::new(current_dir).unwrap();
     let builder = Builder::new("amd64".into(), vec!["linux".into()], storage)
         .expect("Failed to build the image builder");
 

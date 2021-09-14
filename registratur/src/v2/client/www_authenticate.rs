@@ -21,12 +21,10 @@ pub struct WwwAuthenticate<'a> {
 impl<'a> WwwAuthenticate<'a> {
     pub fn parse(input: &'a str) -> Result<Self, Error> {
         tuple((term, term, term))(input)
-            .map(|(_, (realm, service, scope))| {
-                Self {
-                    realm,
-                    service,
-                    scope,
-                }
+            .map(|(_, (realm, service, scope))| Self {
+                realm,
+                service,
+                scope,
             })
             .map_err(|err| {
                 anyhow!("Failed to parse WWW-Authenticate header: {:?}", err)

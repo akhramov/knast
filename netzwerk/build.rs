@@ -1,10 +1,12 @@
 use bindgen::builder;
 
 fn main() {
-    let bindings = builder().header("ffi/pfvar.h")
+    let bindings = builder()
+        .header("ffi/ffi.h")
         .generate()
-        .expect("failed to generate PF bindings");
+        .expect("failed to generate bindings");
 
-    bindings.write_to_file("src/pf/bindings.rs")
-        .expect("failed to write PF bindings on disk");
+    bindings
+        .write_to_file("src/bindings.rs")
+        .expect("failed to write bindings on disk");
 }

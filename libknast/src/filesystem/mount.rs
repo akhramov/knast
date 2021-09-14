@@ -17,9 +17,10 @@ pub fn mount<'a>(
         .flat_map(|option| {
             let mut split = option.as_ref().split("=");
             let key = [split.next().unwrap_or("").as_bytes(), b"\0"].concat();
-            let value = split.next().map(|item| {
-                [item.as_bytes(), b"\0"].concat()
-            }).unwrap_or(vec![]);
+            let value = split
+                .next()
+                .map(|item| [item.as_bytes(), b"\0"].concat())
+                .unwrap_or(vec![]);
 
             vec![key, value]
         })
@@ -58,7 +59,10 @@ pub fn mount<'a>(
 #[fehler::throws]
 pub fn unmount(destination: &dyn AsRef<Path>) {
     if unsafe {
-        libc::unmount(destination.as_bytes()?.as_slice() as *const _ as _, 0)
+        libc::unmount(
+            destination.as_bytes()?.as_slice() as *const _ as _,
+            libc::MNT_FORCE,
+        )
     } < 0
     {
         fehler::throw!(anyhow!(

@@ -1,12 +1,16 @@
+#[cfg(feature = "sled_engine")]
 mod sled_engine;
+#[cfg(feature = "sqlite_engine")]
+mod sqlite_engine;
 
-use std::path::{Path, PathBuf};
+use std::{
+    future::Future,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Error;
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
-#[async_trait]
 pub trait StorageEngine {
     fn initialize(cache_dir: impl AsRef<Path>) -> Result<Box<Self>, Error>;
 
@@ -43,10 +47,13 @@ pub trait StorageEngine {
         key: impl AsRef<[u8]>,
     ) -> Result<bool, Error>;
 
-    async fn flush(&self) -> Result<usize, Error>;
+    fn flush(&self) -> Box<dyn Future<Output = Result<usize, Error>> + Unpin>;
 }
 
-pub type SledStorage = Storage<sled::Db>;
+#[cfg(feature = "sled_engine")]
+pub type TestStorage = Storage<sled::Db>;
+#[cfg(feature = "sqlite_engine")]
+pub type TestStorage = Storage<sqlite_engine::Connection>;
 
 pub struct Storage<T: StorageEngine> {
     inner: Box<T>,
@@ -132,7 +139,7 @@ impl<T: StorageEngine> Storage<T> {
     }
 
     pub async fn flush(&self) -> Result<usize, Error> {
-        self.inner.flush().await
+        Ok(self.inner.flush().await?)
     }
 
     pub fn folder(&self) -> PathBuf {
@@ -140,16 +147,29 @@ impl<T: StorageEngine> Storage<T> {
     }
 }
 
+impl<T: StorageEngine> std::fmt::Debug for Storage<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Storage")
+            .field("directory", &self.folder())
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::Storage;
+
+    #[cfg(feature = "sled_engine")]
+    type Engine = sled::Db;
+    #[cfg(feature = "sqlite_engine")]
+    type Engine = super::sqlite_engine::Connection;
 
     #[test]
     fn test_happy_path() {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<sled::Db>::new(dir.path())
+        let cache = Storage::<Engine>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
@@ -172,7 +192,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<sled::Db>::new(dir.path())
+        let cache = Storage::<Engine>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();
@@ -212,7 +232,7 @@ mod test {
         let dir =
             tempfile::tempdir().expect("failed to create a tmp directory");
 
-        let cache = Storage::<sled::Db>::new(dir.path())
+        let cache = Storage::<Engine>::new(dir.path())
             .expect("Unable to initialize cache");
 
         let value: Vec<u8> = b"ipsum"[..].into();

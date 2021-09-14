@@ -42,8 +42,8 @@ pub fn delete_default() {
 
 #[cfg(test)]
 mod test {
-    use std::process::Command;
     use super::*;
+    use std::process::Command;
 
     #[test_helpers::jailed_test]
     fn test_add_default() {

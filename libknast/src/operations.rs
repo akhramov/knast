@@ -6,31 +6,29 @@ use std::{
     convert::AsRef,
     fs::File,
     io::{BufReader, Error as IoError},
-    path::{Path, PathBuf},
+    path::Path,
     process::Command,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::filesystem::{prefixed_destination, Mountable};
 use anyhow::{anyhow, Error};
-use baustelle::runtime_config::RuntimeConfig;
+pub use baustelle::runtime_config::{Process, Root, RuntimeConfig};
 use jail::{param::Value, process::Jailed};
 use jail::{RunningJail, StoppedJail};
+use nix::{
+    sys::wait::{waitpid, WaitStatus},
+    unistd::Pid,
+};
 use serde::{Deserialize, Serialize};
 use storage::{Storage, StorageEngine};
 
-use crate::filesystem::{prefixed_destination, Mountable};
-
 use command_ext::CommandExt;
 
-const CONTAINER_STATE_STORAGE_KEY: &[u8] = b"CONTAINER_STATE";
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct ContainerState {
-    pub config: RuntimeConfig,
-    pub status: ContainerStatus,
-    pub pid: i32,
-    pub jid: i32,
-    pub bundle: PathBuf,
-}
+const CONTAINER_CONFIG_STORAGE_KEY: &[u8] = b"CONTAINER_CONFIG";
+const CONTAINER_PROCESSES_STORAGE_KEY: &[u8] = b"CONTAINER_PROCESSES";
+const OCI_VERSION: &str = "1.0.2-dev-freebsd";
+const MAIN_PROCESS_EXEC_ID: &str = "";
 
 #[derive(
     Deserialize,
@@ -42,15 +40,25 @@ struct ContainerState {
     strum_macros::AsRefStr,
 )]
 #[strum(serialize_all = "lowercase")]
-enum ContainerStatus {
+pub enum ProcessStatus {
     Created,
     Starting,
     Running,
     Stopped,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OciStatus {
+    pub oci_version: String,
+    pub status: ProcessStatus,
+    pub pid: i32,
+    pub jid: i32,
+    pub exit_status: Option<i32>,
+    pub exited_at: SystemTime,
+}
+
 pub struct OciOperations<'a, T: StorageEngine> {
-    state: Option<ContainerState>,
     storage: &'a Storage<T>,
     key: String,
 }
@@ -58,11 +66,7 @@ pub struct OciOperations<'a, T: StorageEngine> {
 impl<'a, T: StorageEngine> OciOperations<'a, T> {
     #[fehler::throws]
     pub fn new(storage: &'a Storage<T>, key: impl AsRef<str>) -> Self {
-        let state = storage
-            .get(CONTAINER_STATE_STORAGE_KEY, key.as_ref().as_bytes())?;
-
         Self {
-            state,
             storage,
             key: key.as_ref().into(),
         }
@@ -75,27 +79,38 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     /// configuration in the storage.
     #[fehler::throws]
     pub fn create(
-        mut self,
+        self,
         path: impl AsRef<Path>,
         nat_interface: Option<impl AsRef<str>>,
     ) {
-        if self.state.is_some() {
+        if self.get_process(MAIN_PROCESS_EXEC_ID).is_ok() {
             anyhow::bail!("Container '{}' already exists!", self.key);
         }
 
         let config_file = File::open(path.as_ref().join("config.json"))?;
         let reader = BufReader::new(config_file);
-        let config: RuntimeConfig = serde_json::from_reader(reader)?;
+        let mut config: RuntimeConfig = serde_json::from_reader(reader)?;
+        let rootfs_path = config
+            .root
+            .as_ref()
+            .map(|root| path.as_ref().join(root.path.clone()))
+            .ok_or_else(|| {
+                anyhow!("Runtime config: root field must be set")
+            })?;
 
-        self.state = Some(ContainerState {
-            config,
-            status: ContainerStatus::Created,
-            pid: 0,
-            jid: 0,
-            bundle: path.as_ref().to_owned(),
+        config.root = Some(Root {
+            path: rootfs_path,
+            readonly: None,
         });
 
+        self.storage.put(
+            CONTAINER_CONFIG_STORAGE_KEY,
+            self.key.as_bytes(),
+            config,
+        )?;
+
         let rootfs = self.rootfs()?;
+
         // Mountpoints validity check.
         for mountpoint in self.mounts()? {
             mountpoint.mount(&rootfs)?;
@@ -111,22 +126,113 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
         let jail = stopped_jail.start()?;
 
         network::setup(self.storage, &self.key, jail, nat_interface)?;
-        self.persist_state(self.retrieve_state()?)?;
     }
 
     /// Starts previously created container.
     #[fehler::throws]
-    pub fn start(mut self) {
+    pub fn start(self) {
         tracing::info!("START command issued");
-        let state = self.retrieve_state()?;
-        // According to OCI spec & runc implementation, we can only
-        // start created containers, not even stopped: https://git.io/JO0pb
-        if state.status != ContainerStatus::Created {
-            anyhow::bail!("Cannot start {} container", state.status.as_ref());
+
+        self.do_start(MAIN_PROCESS_EXEC_ID, |_| Ok(()))?
+    }
+
+    /// Frees resources allocated by Runtime for the
+    /// container. [OCI lifecycle steps 11-12](https://git.io/JO7NY).
+    pub fn delete(&self) {
+        self.do_delete(MAIN_PROCESS_EXEC_ID);
+    }
+
+    pub fn do_delete(&self, exec_id: &str) {
+        if let Err(err) = self.cleanup(exec_id) {
+            tracing::error!("Failed to delete process: {}", err);
         }
-        let process = state.config.process.clone().ok_or_else(|| {
+    }
+
+    /// Sends a signal to the process
+    #[fehler::throws]
+    pub fn kill(self, signal: i32) {
+        self.do_kill(MAIN_PROCESS_EXEC_ID, signal)?;
+    }
+
+    #[fehler::throws]
+    pub fn do_kill(self, exec_id: &str, signal: i32) {
+        tracing::info!("killing container with {}", signal);
+        let state = &self.get_process(exec_id)?;
+        if state.status != ProcessStatus::Running {
+            anyhow::bail!("Cannot kill {} container.", state.status.as_ref());
+        }
+
+        let jail = self.retrieve_jail()?;
+
+        utils::run_in_fork(|| {
+            jail.attach().map_err(Error::from).and_then(|_| unsafe {
+                if libc::kill(state.pid, signal) < 0 {
+                    anyhow::bail!(
+                        "kill failed: {:?}",
+                        IoError::last_os_error()
+                    )
+                }
+
+                Ok(())
+            })
+        })?
+    }
+
+    #[fehler::throws]
+    pub fn state(&self) -> OciStatus {
+        self.get_state(MAIN_PROCESS_EXEC_ID)?
+    }
+
+    #[fehler::throws]
+    pub fn get_state(&self, exec_id: &str) -> OciStatus {
+        let mut process = self.get_process(exec_id)?;
+        let jail = self.retrieve_jail();
+
+        process.status = match (jail, process.status) {
+            (Ok(_), ProcessStatus::Running) => ProcessStatus::Running,
+            (Err(_), ProcessStatus::Running) => ProcessStatus::Running,
+            (_, status) => status,
+        };
+
+        process
+    }
+
+    pub fn storage(&'a self) -> &'a Storage<T> {
+        self.storage
+    }
+
+    pub fn key(&'a self) -> &'a String {
+        &self.key
+    }
+
+    #[fehler::throws]
+    pub fn do_start(
+        &self,
+        exec_id: &str,
+        f: impl FnOnce(&mut Command) -> Result<(), Error>,
+    ) {
+        let config = self.config()?;
+        let process = config.process.clone().ok_or_else(|| {
             anyhow!("Runtime config: process field must be set")
         })?;
+
+        self.do_exec(exec_id, process, f)?
+    }
+
+    #[fehler::throws]
+    pub fn do_exec(
+        &self,
+        exec_id: &str,
+        process: Process,
+        f: impl FnOnce(&mut Command) -> Result<(), Error>,
+    ) {
+        self.new_process(exec_id)?;
+        let process_status = self.get_process(exec_id)?.status;
+        // According to OCI spec & runc implementation, we can only
+        // start created containers, not even stopped: https://git.io/JO0pb
+        if process_status != ProcessStatus::Created {
+            anyhow::bail!("Cannot start {} process", process_status.as_ref());
+        }
         let rootfs = self.rootfs()?;
         let path = rootfs.as_ref();
         let envs: Vec<(String, String)> = process
@@ -150,17 +256,15 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
             .ok_or_else(|| anyhow!("Runtime config: command is required"))?;
         let args: Vec<_> = args.collect();
 
-        let mut new_state = state.clone();
-        new_state.status = ContainerStatus::Starting;
-        self.storage.compare_and_swap(
-            CONTAINER_STATE_STORAGE_KEY,
-            self.key.as_bytes(),
-            Some(state),
-            Some(&mut new_state),
-        )?;
+        self.update_process(exec_id, |process| {
+            process.status = ProcessStatus::Starting;
+        })?;
 
         let jail = self.retrieve_jail()?;
-        let result = Command::new(command)
+        let mut process = Command::new(command);
+        f(&mut process)?;
+
+        let result = process
             .jail(&jail)
             .args(args)
             .env_clear()
@@ -169,124 +273,129 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
             .uid(uid)
             .gid(gid)
             .spawn();
+        jail.defer_cleanup()?;
 
         match result {
             Err(error) => {
                 tracing::error!("Error occured {}", error);
-                let mut state = state.clone();
-                state.status = ContainerStatus::Stopped;
-                self.persist_state(&state)?;
-                self.state = Some(state);
-                self.delete();
+                self.update_process(exec_id, |process| {
+                    process.status = ProcessStatus::Stopped;
+                })?;
                 fehler::throw!(error);
             }
-            Ok(mut handle) => {
-                let mut state = state.clone();
-                state.status = ContainerStatus::Running;
-                state.pid = handle.id() as _;
-                state.jid = jail.jid;
-                self.persist_state(&state)?;
-                let status = handle.wait()?;
-                state.pid = 0;
-                state.status = ContainerStatus::Stopped;
-                self.persist_state(&state)?;
-                tracing::info!("Process exited with {:?}", status);
+            Ok(handle) => {
+                tracing::info!("Started child process {:?}", handle);
+                self.update_process(exec_id, |process| {
+                    process.status = ProcessStatus::Running;
+                    process.pid = handle.id() as _;
+                    process.jid = jail.jid;
+                })?;
             }
         }
     }
 
-    // TODO: logs errors, don't return
-    /// Frees resources allocated by Runtime for the
-    /// container. [OCI lifecycle steps 11-12](https://git.io/JO7NY).
-    pub fn delete(self) {
-        if let Err(err) = self.cleanup() {
-            tracing::error!("Failed to delete container: {}", err);
-        }
+    #[fehler::throws]
+    pub fn wait(&self) {
+        self.do_wait(MAIN_PROCESS_EXEC_ID)?
     }
 
-    /// Sends a signal to the process
     #[fehler::throws]
-    pub fn kill(self, signal: i32) {
-        tracing::info!("killing container with {}", signal);
-        let state = self.retrieve_state()?;
-        if state.status != ContainerStatus::Running {
-            anyhow::bail!("Cannot kill {} container.", state.status.as_ref());
-        }
+    pub fn do_wait(&self, exec_id: &str) {
+        let process = self.get_process(exec_id)?;
+        tracing::info!("Waiting for child {:?}", process.pid);
 
-        let jail = self.retrieve_jail()?;
-
-        utils::run_in_fork(|| {
-            jail.attach().map_err(Error::from).and_then(|_| unsafe {
-                if libc::kill(state.pid, signal) < 0 {
-                    anyhow::bail!(
-                        "kill failed: {:?}",
-                        IoError::last_os_error()
-                    )
-                }
-
-                Ok(())
+        let exit_status = waitpid(Pid::from_raw(process.pid), None)
+            .map(|status| match status {
+                WaitStatus::Exited(_, code) => Some(code),
+                _ => None,
             })
-        })?
-    }
+            .map_err(Error::from)?;
 
-    #[fehler::throws]
-    pub fn state(&self) -> serde_json::Value {
-        let state = self.retrieve_state()?;
-        let jail = self.retrieve_jail();
-
-        let status_str = state.status.as_ref();
-        let status = match (jail, state.status) {
-            (Ok(_), ContainerStatus::Running) => "running",
-            (Err(_), ContainerStatus::Running) => "stopped",
-            _ => status_str,
-        };
-
-        serde_json::json!({
-            "ociVersion": "1.0.2-dev-freebsd",
-            "id": self.key,
-            "status": status,
-            "pid": state.pid,
-            "bundle": state.bundle,
-        })
+        self.update_process(exec_id, |process| {
+            process.pid = 0;
+            process.status = ProcessStatus::Stopped;
+            process.exit_status = exit_status;
+            process.exited_at = SystemTime::now();
+        })?;
+        tracing::info!("Process exited with {:?}", exit_status);
     }
 
     #[fehler::throws]
     fn rootfs(&self) -> impl AsRef<Path> {
-        let state = self.retrieve_state()?;
+        let config = self.config()?;
 
-        let rootfs_path = state
-            .config
+        config
             .root
             .as_ref()
             .map(|root| root.path.clone())
-            .ok_or_else(|| {
-                anyhow!("Runtime config: root field must be set")
-            })?;
-
-        state.bundle.join(rootfs_path)
+            .ok_or_else(|| anyhow!("Runtime config: root field must be set"))?
     }
 
     #[fehler::throws]
     fn mounts(&self) -> Vec<impl Mountable> {
-        let state = self.retrieve_state()?;
+        let config = self.config()?;
 
-        state.config.mounts.clone().unwrap_or_else(Vec::new)
+        config.mounts.clone().unwrap_or_else(Vec::new)
     }
 
     #[fehler::throws]
-    fn persist_state(&self, state: &ContainerState) {
-        self.storage.put(
-            CONTAINER_STATE_STORAGE_KEY,
-            self.key.as_bytes(),
-            state,
+    fn config(&self) -> RuntimeConfig {
+        self.storage
+            .get(CONTAINER_CONFIG_STORAGE_KEY, self.key.as_bytes())?
+            .ok_or_else(|| {
+                anyhow!("Container '{}' doesn't exist!", self.key)
+            })?
+    }
+
+    pub fn process_id(&self, exec_id: &str) -> Vec<u8> {
+        [self.key.as_bytes(), b"/", exec_id.as_bytes()].concat()
+    }
+
+    #[fehler::throws]
+    fn get_process(&self, exec_id: &str) -> OciStatus {
+        self.storage
+            .get(CONTAINER_PROCESSES_STORAGE_KEY, self.process_id(exec_id))?
+            .ok_or_else(|| anyhow!("Process '{}' doesn't exist!", exec_id))?
+    }
+
+    #[fehler::throws]
+    fn update_process(&self, exec_id: &str, f: impl FnOnce(&mut OciStatus)) {
+        let process = self.get_process(exec_id)?;
+        let mut new_process = process.clone();
+
+        f(&mut new_process);
+
+        self.storage.compare_and_swap(
+            CONTAINER_PROCESSES_STORAGE_KEY,
+            self.process_id(exec_id),
+            Some(process),
+            Some(new_process),
         )?;
     }
 
     #[fehler::throws]
-    fn retrieve_state(&'a self) -> &'a ContainerState {
-        self.state.as_ref().ok_or_else(|| {
-            anyhow!("Container '{}' doesn't exist!", self.key)
-        })?
+    fn new_process(&self, exec_id: &str) {
+        self.storage.compare_and_swap(
+            CONTAINER_PROCESSES_STORAGE_KEY,
+            self.process_id(exec_id),
+            None,
+            Some(OciStatus {
+                oci_version: OCI_VERSION.into(),
+                status: ProcessStatus::Created,
+                pid: 0,
+                jid: 0,
+                exit_status: None,
+                exited_at: UNIX_EPOCH,
+            }),
+        )?;
+    }
+
+    #[fehler::throws]
+    fn delete_process(&self, exec_id: &str) {
+        self.storage.remove(
+            CONTAINER_PROCESSES_STORAGE_KEY,
+            self.process_id(exec_id),
+        )?
     }
 
     #[fehler::throws]
@@ -296,26 +405,25 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     }
 
     #[fehler::throws]
-    fn cleanup(self) {
-        self.retrieve_jail()?.defer_cleanup()?;
-
-        let status = &self.state()?["status"];
-        if status != "stopped" && status != "created" {
+    fn cleanup(&self, exec_id: &str) {
+        let status = &self.get_state(exec_id)?.status;
+        if status != &ProcessStatus::Stopped
+            && status != &ProcessStatus::Created
+        {
             anyhow::bail!(
                 "Cannot delete {} container. Must be stopped first",
-                status
+                status.as_ref()
             );
         }
 
-        self.storage
-            .remove(CONTAINER_STATE_STORAGE_KEY, self.key.as_bytes())?;
+        self.delete_process(exec_id)?;
 
         let rootfs = self.rootfs()?;
         for mount in self.mounts()?.iter().rev() {
             mount.unmount(&rootfs)?;
         }
 
-        network::teardown(self.storage, self.key)?;
+        network::teardown(self.storage, self.key.clone())?;
     }
 }
 
@@ -329,7 +437,7 @@ mod tests {
     };
 
     use gag::BufferRedirect;
-    use storage::SledStorage;
+    use storage::TestStorage;
     use tempfile::TempDir;
 
     use super::*;
@@ -412,21 +520,26 @@ mod tests {
         delete_container(storage, name);
     }
 
-    fn create_container(storage: Arc<SledStorage>, name: &str, path: &Path) {
+    fn create_container(storage: Arc<TestStorage>, name: &str, path: &Path) {
         OciOperations::new(&storage.clone(), name)
             .expect("failed to init OCI lifecycle struct")
             .create(path.join("container"), Some("lo0"))
             .expect("failed to create container");
     }
 
-    fn start_container(storage: Arc<SledStorage>, name: &str) {
+    fn start_container(storage: Arc<TestStorage>, name: &str) {
         OciOperations::new(&storage.clone(), name)
             .expect("failed to init OCI lifecycle struct")
             .start()
             .expect("failed to start container");
+
+        OciOperations::new(&storage.clone(), name)
+            .expect("failed to init OCI lifecycle struct")
+            .wait()
+            .expect("failed to wait container");
     }
 
-    fn kill_container(storage: Arc<SledStorage>, name: &str, signal: i32) {
+    fn kill_container(storage: Arc<TestStorage>, name: &str, signal: i32) {
         OciOperations::new(&storage.clone(), name)
             .expect("failed to init OCI lifecycle struct")
             .kill(signal)
@@ -435,12 +548,7 @@ mod tests {
 
     /// Delete the container
     /// Panics if there are mounted volumes left
-    fn delete_container(storage: Arc<SledStorage>, name: &str) {
-        let bundle = OciOperations::new(&storage.clone(), name)
-            .expect("failed to init OCI lifecycle struct")
-            .state
-            .expect("container should be initialized")
-            .bundle;
+    fn delete_container(storage: Arc<TestStorage>, name: &str) {
         OciOperations::new(&storage.clone(), name)
             .expect("failed to init OCI lifecycle struct")
             .delete();
@@ -450,8 +558,7 @@ mod tests {
             .expect("Failed to execute mount");
         let output_string = String::from_utf8(mount_output.stdout).unwrap();
 
-        assert!(!output_string
-            .contains(&bundle.into_os_string().into_string().unwrap()));
+        assert!(!output_string.contains(name));
     }
 
     /// Captures stdout.
@@ -464,9 +571,9 @@ mod tests {
         output
     }
 
-    fn prepare_bundle(cmd: &str) -> (Arc<SledStorage>, TempDir) {
+    fn prepare_bundle(cmd: &str) -> (Arc<TestStorage>, TempDir) {
         let tmpdir = tempfile::tempdir().unwrap();
-        let storage = SledStorage::new(tmpdir.path()).unwrap();
+        let storage = TestStorage::new(tmpdir.path()).unwrap();
         let bundle = test_helpers::fixture_path!("container");
         Command::new("cp")
             .arg("-r")

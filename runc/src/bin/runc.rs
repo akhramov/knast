@@ -2,13 +2,13 @@ use std::process::exit;
 
 use clap::{load_yaml, App, ArgMatches};
 use libknast::operations::OciOperations;
-use storage::{SledStorage, StorageEngine};
+use storage::{StorageEngine, TestStorage};
 
 fn main() {
     let yaml = load_yaml!("runc.yaml");
     let matches = App::from(yaml).get_matches();
     let home = std::env::var("HOME").unwrap();
-    let storage = SledStorage::new(home).unwrap();
+    let storage = TestStorage::new(home).unwrap();
     let container_id =
         |matches: &ArgMatches| matches.value_of("ID").unwrap().to_owned();
 
@@ -44,7 +44,9 @@ fn main() {
 
 fn state(ops: OciOperations<impl StorageEngine>) {
     match ops.state() {
-        Ok(result) => println!("{}", result),
+        Ok(result) => {
+            println!("{}", serde_json::to_string_pretty(&result).unwrap())
+        }
         Err(error) => {
             println!("{}", error);
             exit(1);

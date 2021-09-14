@@ -5,4 +5,4 @@ pub use storage::Storage;
 pub use storage::StorageEngine;
 
 #[cfg(test)]
-pub use storage::SledStorage as TestStorage;
+pub use storage::TestStorage;

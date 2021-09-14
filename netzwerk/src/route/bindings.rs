@@ -46,7 +46,7 @@ pub fn rtmsg(operation: Operation, address: Option<&str>) {
     message.header.rtm_version = RTM_VERSION;
     message.header.rtm_addrs = match operation {
         Operation::Add => RTA_DST | RTA_GATEWAY | RTA_NETMASK,
-        Operation::Delete => RTA_DST | RTA_NETMASK
+        Operation::Delete => RTA_DST | RTA_NETMASK,
     };
     message.header.rtm_seq = 1;
     let len = mem::size_of::<rtmsg<[sockaddr_in; 3]>>();
