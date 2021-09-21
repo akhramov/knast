@@ -139,11 +139,13 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     /// Frees resources allocated by Runtime for the
     /// container. [OCI lifecycle steps 11-12](https://git.io/JO7NY).
     pub fn delete(&self) {
-        self.do_delete(MAIN_PROCESS_EXEC_ID);
+        if self.retrieve_jail().is_err() {
+            self.do_delete();
+        }
     }
 
-    pub fn do_delete(&self, exec_id: &str) {
-        if let Err(err) = self.cleanup(exec_id) {
+    pub fn do_delete(&self) {
+        if let Err(err) = self.cleanup() {
             tracing::error!("Failed to delete process: {}", err);
         }
     }
@@ -335,7 +337,11 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     fn mounts(&self) -> Vec<impl Mountable> {
         let config = self.config()?;
 
-        config.mounts.clone().unwrap_or_else(Vec::new)
+        let mut result = config.mounts.clone().unwrap_or_else(Vec::new);
+
+        result.sort_by(|a, b| a.destination.cmp(&b.destination));
+
+        result
     }
 
     #[fehler::throws]
@@ -391,7 +397,7 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     }
 
     #[fehler::throws]
-    fn delete_process(&self, exec_id: &str) {
+    pub fn delete_process(&self, exec_id: &str) {
         self.storage.remove(
             CONTAINER_PROCESSES_STORAGE_KEY,
             self.process_id(exec_id),
@@ -399,25 +405,13 @@ impl<'a, T: StorageEngine> OciOperations<'a, T> {
     }
 
     #[fehler::throws]
-    fn retrieve_jail(&'a self) -> RunningJail {
+    pub fn retrieve_jail(&'a self) -> RunningJail {
         RunningJail::from_name(&self.key)
             .map_err(|_| anyhow!("Container is not running"))?
     }
 
     #[fehler::throws]
-    fn cleanup(&self, exec_id: &str) {
-        let status = &self.get_state(exec_id)?.status;
-        if status != &ProcessStatus::Stopped
-            && status != &ProcessStatus::Created
-        {
-            anyhow::bail!(
-                "Cannot delete {} container. Must be stopped first",
-                status.as_ref()
-            );
-        }
-
-        self.delete_process(exec_id)?;
-
+    fn cleanup(&self) {
         let rootfs = self.rootfs()?;
         for mount in self.mounts()?.iter().rev() {
             mount.unmount(&rootfs)?;

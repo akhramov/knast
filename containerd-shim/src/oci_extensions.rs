@@ -1,8 +1,8 @@
 use std::{
     fs::{File, OpenOptions},
     io::{copy, Error as StdError, ErrorKind},
-    os::unix::{io::FromRawFd, process::CommandExt},
-    process::{self, Command},
+    os::unix::{io::{FromRawFd, AsRawFd}, process::CommandExt},
+    process::{self, Command, Stdio},
     thread,
 };
 
@@ -14,6 +14,7 @@ use nix::{
 };
 use serde::{Deserialize, Serialize};
 use storage::StorageEngine;
+use url::Url;
 
 const CONTAINER_STDIO_STORAGE_KEY: &[u8] = b"CONTAINER_STDIO";
 const CONTAINER_PTY_STATE_KEY: &[u8] = b"CONTAINER_PTY_STATE";
@@ -51,9 +52,9 @@ pub trait ContainerdExtension {
     fn resize_pty(&self, exec_id: &str, winsize: Winsize)
         -> Result<(), Error>;
     /// Persists PTY master side
-    fn save_pty_state(&self, exec_id: &str, fd: i32) -> Result<(), Error>;
+    fn save_pty_state(&self, exec_id: &str, pty: (i32, i32)) -> Result<(), Error>;
     /// Returns PTY state
-    fn pty_state(&self, exec_id: &str) -> Result<i32, Error>;
+    fn pty_state(&self, exec_id: &str) -> Result<(i32, i32), Error>;
 }
 
 impl<'a, T: StorageEngine> ContainerdExtension for OciOperations<'a, T> {
@@ -62,7 +63,7 @@ impl<'a, T: StorageEngine> ContainerdExtension for OciOperations<'a, T> {
         exec_id: &str,
         mut winsize: Winsize,
     ) -> Result<(), Error> {
-        let master_fd = self.pty_state(exec_id)?;
+        let (master_fd, _) = self.pty_state(exec_id)?;
 
         if unsafe { tcsetwinsize(master_fd, &mut winsize) < 0 } {
             anyhow::bail!(
@@ -77,25 +78,39 @@ impl<'a, T: StorageEngine> ContainerdExtension for OciOperations<'a, T> {
     fn exec(self, exec_id: &str, process: Process) -> Result<(), Error> {
         let triple = self.stdio_triple(exec_id)?;
         self.do_exec(&exec_id, process, |command| {
-            let master = setup_io(command, triple)?;
-            if let Some(master) = master {
-                self.save_pty_state(exec_id, master)?;
+            if let Some(pty) = setup_io(command, &triple)? {
+                self.save_pty_state(exec_id, pty)?;
             }
 
             Ok(())
-        })
+        })?;
+
+        if triple.terminal {
+            let (_, slave) = self.pty_state(&exec_id)?;
+
+            close(slave)?;
+        }
+
+        Ok(())
     }
 
     fn start(self, exec_id: &str) -> Result<(), Error> {
         let triple = self.stdio_triple(exec_id)?;
         self.do_start(&exec_id, |command| {
-            let master = setup_io(command, triple)?;
-            if let Some(master) = master {
-                self.save_pty_state(exec_id, master)?;
+            if let Some(pty) = setup_io(command, &triple)? {
+                self.save_pty_state(exec_id, pty)?;
             }
 
             Ok(())
-        })
+        })?;
+
+        if triple.terminal {
+            let (_, slave) = self.pty_state(&exec_id)?;
+
+            close(slave)?;
+        }
+
+        Ok(())
     }
 
     fn stdio_triple(&self, exec_id: &str) -> Result<StdioTriple, Error> {
@@ -121,32 +136,33 @@ impl<'a, T: StorageEngine> ContainerdExtension for OciOperations<'a, T> {
         Ok(())
     }
 
-    fn save_pty_state(&self, exec_id: &str, fd: i32) -> Result<(), Error> {
+    fn save_pty_state(&self, exec_id: &str, pty: (i32, i32)) -> Result<(), Error> {
+        tracing::info!("PTY for {}/{} is {:?}", self.key(), exec_id, pty);
         self.storage().put(
             CONTAINER_PTY_STATE_KEY,
             [self.key().as_bytes(), b"/", exec_id.as_bytes()].concat(),
-            fd,
+            pty,
         )?;
 
         Ok(())
     }
 
-    fn pty_state(&self, exec_id: &str) -> Result<i32, Error> {
+    fn pty_state(&self, exec_id: &str) -> Result<(i32, i32), Error> {
         self.storage()
             .get(
                 CONTAINER_PTY_STATE_KEY,
                 [self.key().as_bytes(), b"/", exec_id.as_bytes()].concat(),
             )?
             .ok_or_else(|| {
-                anyhow::anyhow!("Container's master PTY wasn't found")
+                anyhow::anyhow!("Container's PTY wasn't found")
             })
     }
 }
 
 fn setup_io(
     command: &mut Command,
-    triple: StdioTriple,
-) -> Result<Option<i32>, Error> {
+    triple: &StdioTriple,
+) -> Result<Option<(i32, i32)>, Error> {
     tracing::info!("Initializing process IO");
     let StdioTriple {
         stdin,
@@ -156,7 +172,7 @@ fn setup_io(
     } = triple;
 
     tracing::info!("Openning file descriptors");
-    if terminal {
+    if *terminal {
         let mut stdin = OpenOptions::new().read(true).open(stdin)?;
         let mut stdout = OpenOptions::new().write(true).open(stdout)?;
         let OpenptyResult { master, slave } = openpty(None, None)?;
@@ -180,6 +196,7 @@ fn setup_io(
                     use nix::unistd::setsid;
 
                     setsid()?;
+
                     dup2(slave, STDIN_FILENO)?;
                     dup2(slave, STDOUT_FILENO)?;
                     dup2(slave, STDERR_FILENO)?;
@@ -193,12 +210,41 @@ fn setup_io(
             });
         }
 
-        Ok(Some(master))
+        Ok(Some((master, slave)))
     } else {
         if !stdin.is_empty() {
             let stdin = OpenOptions::new().read(true).open(stdin)?;
             command.stdin(stdin);
         }
+
+        if stdout.starts_with("binary") {
+            let url = Url::parse(&stdout)?;
+            let path = url.path();
+
+            let child = Command::new(path)
+                .envs(
+                    url.query_pairs()
+                        .map(|(k, v)| (k.to_string(), v.to_string())),
+                )
+                .stdin(Stdio::piped())
+                .spawn()?;
+
+            // Unwrap: stdin set previously.
+            let result = child.stdin.as_ref().unwrap();
+            let raw_fd = result.as_raw_fd();
+
+            // thread::spawn(move || {
+            //     child.wait().unwrap();
+            // });
+
+            let stdout = unsafe { File::from_raw_fd(raw_fd) };
+            let stderr = unsafe { File::from_raw_fd(raw_fd) };
+
+            command.stdout(stdout).stderr(stderr);
+
+            return Ok(None);
+        }
+
         let stdout = OpenOptions::new().write(true).open(stdout)?;
         let stderr = OpenOptions::new().write(true).open(stderr)?;
 

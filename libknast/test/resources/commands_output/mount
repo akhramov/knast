@@ -1,5 +1,5 @@
 zroot/tmp on / (zfs, local, noatime, nosuid, nfsv4acls)
 devfs on /dev (devfs)
-linsysfs on /sys (linsysfs, local, noexec, nosuid, read-only)
-linprocfs on /proc (linprocfs, local, noexec, nosuid, read-only)
 fdescfs on /dev/fd (fdescfs)
+linprocfs on /proc (linprocfs, local, noexec, nosuid, read-only)
+linsysfs on /sys (linsysfs, local, noexec, nosuid, read-only)
