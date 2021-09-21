@@ -139,11 +139,12 @@ impl<T: StorageEngine + Send + Sync + 'static> Task for TaskService<T> {
         _ctx: &TtrpcContext,
         request: StartRequest,
     ) -> ttrpc::Result<StartResponse> {
+        let _guard = self.start_mutex.lock();
+
         if !request.exec_id.is_empty() {
             return Ok(StartResponse::new());
         }
 
-        let _guard = self.start_mutex.lock();
         tracing::info!("Starting container");
         let ops = self
             .operations(request.id.clone())
@@ -190,7 +191,8 @@ impl<T: StorageEngine + Send + Sync + 'static> Task for TaskService<T> {
             .map(Option::Some)
             .map_err(error_response)?
             .into();
-        ops.delete();
+        ops.delete_process(&request.exec_id)
+            .map_err(error_response)?;
 
         Ok(DeleteResponse {
             pid: state.pid.try_into().map_err(error_response)?,
@@ -223,6 +225,7 @@ impl<T: StorageEngine + Send + Sync + 'static> Task for TaskService<T> {
             .map(Option::Some)
             .map_err(error_response)?
             .into();
+        ops.delete();
         Ok(WaitResponse {
             exit_status,
             exited_at,
@@ -236,6 +239,7 @@ impl<T: StorageEngine + Send + Sync + 'static> Task for TaskService<T> {
         _ctx: &TtrpcContext,
         _req: ShutdownRequest,
     ) -> ::ttrpc::Result<Empty> {
+        tracing::info!("Shutdown request received");
         // TODO: reference counting
         Ok(Empty::default())
     }
